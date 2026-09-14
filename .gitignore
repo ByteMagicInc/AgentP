@@ -1,0 +1,7 @@
+target/
+.idea/
+.fleet/
+.history/
+agent-p.iml
+.claude/settings.local.json
+config.json
