@@ -61,10 +61,10 @@
       "remove_images": false
     },
     {
-      "name": "Limitless by Bankless",
-      "feed_url": "https://feeds.transistor.fm/the-limitless-podcast",
-      "album_name": "Limitless by Bankless",
-      "artist": "David, Ejaaz, Josh",
+      "name": "The Really Useful Podcast",
+      "feed_url": "https://feeds.transistor.fm/the-really-useful-podcast",
+      "album_name": "The Really Useful Podcast",
+      "artist": "Christian Cawley",
       "overwrite_tags": true,
       "overwrite_album_name": true,
       "overwrite_artist": true,
@@ -166,10 +166,10 @@
       "remove_images": false
     },
     {
-      "name": "Warning Shots",
-      "feed_url": "https://api.substack.com/feed/podcast/5979336/s/261558.rss",
-      "album_name": "Warning Shots",
-      "artist": "The AI Risk Network",
+      "name": "Darknet Diaries",
+      "feed_url": "https://feeds.megaphone.fm/darknetdiaries",
+      "album_name": "Darknet Diaries",
+      "artist": "Jack Rhysider",
       "overwrite_tags": true,
       "overwrite_album_name": true,
       "overwrite_artist": true,
@@ -436,10 +436,10 @@
       "remove_images": false
     },
     {
-      "name": "Wading Through AI",
-      "feed_url": "https://api.substack.com/feed/podcast/865289/s/339273.rss",
-      "album_name": "Wading Through AI",
-      "artist": "Casey Muratori and Demetri Spanos",
+      "name": "The Stack Overflow Podcast",
+      "feed_url": "https://rss.art19.com/the-stack-overflow-podcast",
+      "album_name": "The Stack Overflow Podcast",
+      "artist": "The Stack Overflow Podcast",
       "overwrite_tags": true,
       "overwrite_album_name": true,
       "overwrite_artist": true,
