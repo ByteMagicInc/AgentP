@@ -1,6 +1,7 @@
 //! TUI rendering: screen dispatcher, theme, shared widgets, and per-screen draw functions.
 
 mod add_podcast;
+mod banner;
 mod command_palette;
 mod config;
 mod download;
