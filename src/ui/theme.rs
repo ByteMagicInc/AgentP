@@ -27,7 +27,7 @@ pub const ASCII_ART_MIC: [&str; 6] = [
 ];
 
 pub const ASCII_ART_MIC_EYES_ROW: usize = 1;
-pub const ASCII_ART_MIC_EYES_CLOSED: &str = " █ ▄  ▄ █ ";
+pub const ASCII_ART_MIC_EYES_CLOSED: &str = " █ ─  ─ █ ";
 
 pub const ASCII_ART_TEXT: [&str; 6] = [
     "   _                    _   ____   ",
