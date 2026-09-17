@@ -14,27 +14,27 @@ use ratatui::{
 
 use super::theme::*;
 
+/// The mascot. Its top rows sit one column right of the bottom two, so it
+/// leans slightly to the right.
 const MIC: [&str; 6] = [
-    " ▄██████▄ ",
-    " █ ▀  ▀ █ ",
-    " █ ▀▄▄▀ █ ",
-    " ▀██▄▄██▀ ",
-    "    ██    ",
-    "  ▄████▄  ",
+    "  ▄██████▄ ",
+    "  █ ▀  ▀ █ ",
+    "  █ ▀▄▄▀ █ ",
+    "  ▀██▄▄██▀ ",
+    "    ██     ",
+    "  ▄████▄   ",
 ];
 
+/// Today's letter shapes drawn with joined line characters, so the strokes of
+/// each letter connect instead of floating inside separate cells.
 const WORDMARK: [&str; 6] = [
-    "   _                    _   ____",
-    "  / \\   __ _  ___ _ __ | |_|  _ \\",
-    " / _ \\ / _` |/ _ \\ '_ \\| __| |_) |",
-    "/ ___ \\ (_| |  __/ | | | |_|  __/",
-    "/_/   \\_\\__, |\\___|_| |_|\\__|_|",
-    "        |___/",
+    "    ▁                    ▁   ▁▁▁▁",
+    "   ╱ ╲   ▁▁ ▁  ▁▁▁ ▁ ▁▁ │ │▁│  ▁ ╲",
+    "  ╱ ▁ ╲ ╱ ▁` │╱ ▁ ╲ '▁ ╲│ ▁▁│ │▁) │",
+    " ╱ ▁▁▁ ╲ (▁│ │  ▁▁╱ │ │ │ │▁│  ▁▁╱",
+    "╱▁╱   ╲▁╲▁▁, │╲▁▁▁│▁│ │▁│╲▁▁│▁│",
+    "        │▁▁▁╱",
 ];
-
-/// Leading space per row: the top rows sit one column right of the bottom two,
-/// so the mascot and the wordmark lean slightly to the right.
-const LEAN: [&str; 6] = [" ", " ", " ", " ", "", ""];
 
 const EYES_ROW: usize = 1;
 const VERTICAL_PADDING: u16 = 1;
@@ -74,19 +74,14 @@ fn banner_lines(elapsed: Duration) -> Vec<Line<'static>> {
 
     MIC.iter()
         .zip(WORDMARK)
-        .zip(LEAN)
         .enumerate()
-        .map(|(row, ((&mic, text), lean))| {
+        .map(|(row, (&mic, text))| {
             let mic = if closed && row == EYES_ROW {
                 Span::styled(mic.replace('▀', "─"), mic_style)
             } else {
                 Span::styled(mic, mic_style)
             };
-            Line::from(vec![
-                Span::raw(lean),
-                mic,
-                Span::styled(prefix(text, visible), text_style),
-            ])
+            Line::from(vec![mic, Span::styled(prefix(text, visible), text_style)])
         })
         .collect()
 }
@@ -96,7 +91,7 @@ fn banner_lines(elapsed: Duration) -> Vec<Line<'static>> {
 /// The lines are left-aligned inside a box as wide as the finished art, so rows
 /// of different lengths and the growing reveal never shift horizontally.
 pub(super) fn draw_banner(frame: &mut Frame, area: Rect, elapsed: Duration) {
-    let width = (widest(&LEAN) + widest(&MIC) + widest(&WORDMARK)) as u16;
+    let width = (widest(&MIC) + widest(&WORDMARK)) as u16;
     let [area] = Layout::horizontal([Constraint::Length(width)])
         .flex(Flex::Center)
         .areas(area);
@@ -120,7 +115,7 @@ mod tests {
         assert_eq!(prefix(WORDMARK[1], revealed_columns(Duration::ZERO)), "");
         assert_eq!(
             prefix(WORDMARK[1], revealed_columns(Duration::from_millis(100))),
-            "  / \\"
+            "   ╱ "
         );
         assert_eq!(
             prefix(WORDMARK[1], revealed_columns(Duration::from_secs(1))),
