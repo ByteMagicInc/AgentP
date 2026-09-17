@@ -64,7 +64,7 @@ fn prefix(row: &'static str, columns: usize) -> &'static str {
 
 fn banner_lines(elapsed: Duration) -> Vec<Line<'static>> {
     let mic_style = Style::default().fg(ACCENT).add_modifier(Modifier::BOLD);
-    let text_style = Style::default().fg(TITLE_FG);
+    let text_style = Style::default().fg(TITLE_FG).add_modifier(Modifier::BOLD);
     let visible = revealed_columns(elapsed);
     let closed = eyes_closed(elapsed);
 
