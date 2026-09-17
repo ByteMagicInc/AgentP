@@ -1,6 +1,7 @@
 """Capture README media from the real TUI on Linux.
 
 Run cargo build --locked, then run this with Python, Pillow and pyte installed.
+Requires DejaVu Sans and Sans Mono fonts, including Bold and Oblique faces.
 Uses live RSS feeds and a disposable HOME; never downloads audio or edits user config.
 """
 
@@ -27,8 +28,9 @@ COLS, ROWS = 150, 38
 CELL_W, CELL_H, PAD, OUTER, TITLE_H = 10, 24, 18, 18, 48
 BG, PAGE_BG, TITLE_BG = "#282a36", "#191a21", "#21222c"
 FONTS = Path("/usr/share/fonts/truetype/dejavu")
-FONT = ImageFont.truetype(str(FONTS / "DejaVuSansMono.ttf"), 18)
-BOLD = ImageFont.truetype(str(FONTS / "DejaVuSansMono-Bold.ttf"), 18)
+FONT = ImageFont.truetype(str(FONTS / "DejaVuSansMono.ttf"), 17)
+BOLD = ImageFont.truetype(str(FONTS / "DejaVuSansMono-Bold.ttf"), 17)
+ITALIC = ImageFont.truetype(str(FONTS / "DejaVuSansMono-Oblique.ttf"), 17)
 TITLE_FONT = ImageFont.truetype(str(FONTS / "DejaVuSans.ttf"), 16)
 FEATURED = ["The AI Daily Brief", "Merge Conflict", "Committing High Reason", "The Pragmatic Engineer"]
 ANSI = dict(zip(
@@ -44,6 +46,46 @@ def color(value, default):
     if value == "default":
         return default
     return ANSI.get(value, value if value.startswith("#") else "#" + value)
+
+
+def draw_glyph(draw, x, y, ch, fg):
+    right, bottom = x + CELL_W - 1, y + CELL_H - 1
+    cx, cy = x + CELL_W // 2, y + CELL_H // 2
+    if ch.data in "─│┌┐└┘├┤┬┴┼╭╮╰╯":
+        directions = {
+            "─": "lr", "│": "ud", "┌": "rd", "┐": "ld", "└": "ru", "┘": "lu",
+            "├": "rud", "┤": "lud", "┬": "lrd", "┴": "lru", "┼": "lrud",
+            "╭": "rd", "╮": "ld", "╰": "ru", "╯": "lu",
+        }[ch.data]
+        if ch.data in "╭╮╰╯":
+            if "d" in directions:
+                draw.line((cx, cy + 5, cx, bottom), fill=fg)
+            else:
+                draw.line((cx, y, cx, cy - 5), fill=fg)
+            arcs = {
+                "╭": ((cx, cy, cx + 10, cy + 10), 180, 270),
+                "╮": ((cx - 10, cy, cx, cy + 10), 270, 360),
+                "╰": ((cx, cy - 10, cx + 10, cy), 90, 180),
+                "╯": ((cx - 10, cy - 10, cx, cy), 0, 90),
+            }
+            box, start, end = arcs[ch.data]
+            draw.arc(box, start, end, fill=fg)
+        else:
+            for direction, endpoint in (("l", (x, cy)), ("r", (right, cy)),
+                                        ("u", (cx, y)), ("d", (cx, bottom))):
+                if direction in directions:
+                    draw.line((cx, cy, *endpoint), fill=fg)
+    elif ch.data in "▁▂▃▄▅▆▇█":
+        height = ("▁▂▃▄▅▆▇█".index(ch.data) + 1) * CELL_H // 8
+        draw.rectangle((x, y + CELL_H - height, right, bottom), fill=fg)
+    elif ch.data == "▀":
+        draw.rectangle((x, y, right, y + CELL_H // 2 - 1), fill=fg)
+    elif ch.data in "╱╲":
+        ends = (x, bottom, right, y) if ch.data == "╱" else (x, y, right, bottom)
+        draw.line(ends, fill=fg)
+    else:
+        font = BOLD if ch.bold else ITALIC if ch.italics else FONT
+        draw.text((x, y), ch.data, font=font, fill=fg)
 
 
 class Terminal:
@@ -135,7 +177,7 @@ class Terminal:
                 if ch.data.strip():
                     glyphs.append((px, py, ch, fg))
         for px, py, ch, fg in glyphs:
-            draw.text((px, py - 1), ch.data, font=BOLD if ch.bold else FONT, fill=fg)
+            draw_glyph(draw, px, py, ch, fg)
         width, height = body_w + OUTER * 2, body_h + TITLE_H + OUTER * 2
         image = Image.new("RGB", (width, height), PAGE_BG)
         d = ImageDraw.Draw(image)
@@ -160,11 +202,17 @@ class Terminal:
         self.durations.append(duration)
         if screenshot:
             frame.save(ASSETS / screenshot)
+        for elapsed in range(100, duration, 100):
+            self.drain(0.1)
+            frame = self.render()
+            self.durations[-1] = 100
+            self.frames.append(frame)
+            self.durations.append(min(100, duration - elapsed))
 
     def gif(self, name):
         self.frames[0].save(ASSETS / name, save_all=True, append_images=self.frames[1:],
                             duration=self.durations, loop=0, optimize=True, disposal=1)
-        print(f"{name}: {len(self.frames)} verified states, {sum(self.durations) / 1000:.1f}s", flush=True)
+        print(f"{name}: {len(self.frames)} frames, all state checks passed, {sum(self.durations) / 1000:.1f}s", flush=True)
 
     def episodes(self, name):
         self.send(b"\r")
