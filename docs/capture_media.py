@@ -38,7 +38,7 @@ import time
 from pathlib import Path
 
 import pyte
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "docs/assets"
@@ -207,6 +207,7 @@ class Terminal:
         )
         os.close(slave)
         self.frames, self.durations = [], []
+        self.last_frame = None
 
     def __enter__(self):
         self.wait_for(lambda: "Podcasts" in self.text())
@@ -315,7 +316,9 @@ class Terminal:
         """Check a state and record a pause, with duration in milliseconds.
 
         Save the initial frame as a PNG when requested; sample subsequent
-        output at 100 ms intervals for the GIF's live banner animation.
+        output at 100 ms intervals for the GIF's live banner animation. Merge
+        identical samples and retain changed frames as indexed-color images,
+        keeping only the latest RGB frame for lossless comparison.
         """
         text = self.text()
         for value in expected:
@@ -324,16 +327,22 @@ class Terminal:
         assert "Loading" not in text, text
         assert "Error:" not in text, text
         frame = self.render()
-        self.frames.append(frame)
-        self.durations.append(duration)
         if screenshot:
             frame.save(ASSETS / screenshot)
-        for elapsed in range(100, duration, 100):
-            self.drain(0.1)
-            frame = self.render()
-            self.durations[-1] = 100
-            self.frames.append(frame)
-            self.durations.append(min(100, duration - elapsed))
+        for elapsed in range(0, duration, 100):
+            if elapsed:
+                self.drain(0.1)
+                frame = self.render()
+            hold = min(100, duration - elapsed)
+            if (
+                self.last_frame is not None
+                and ImageChops.difference(self.last_frame, frame).getbbox() is None
+            ):
+                self.durations[-1] += hold
+            else:
+                self.frames.append(frame.convert("P", palette=Image.Palette.ADAPTIVE))
+                self.durations.append(hold)
+                self.last_frame = frame
 
     def gif(self, name):
         """Write the accumulated frames as an optimized, looping GIF."""
