@@ -21,6 +21,28 @@ impl fmt::Display for DefaultMode {
     }
 }
 
+/// Which wordmark the TUI banner draws.
+///
+/// `Joined` uses box-drawing characters whose strokes meet across cell edges,
+/// which needs a terminal that draws those characters itself; `Ascii` is the
+/// plain `/ \ | _` art that renders anywhere.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, clap::ValueEnum)]
+#[serde(rename_all = "snake_case")]
+pub enum BannerStyle {
+    #[default]
+    Joined,
+    Ascii,
+}
+
+impl fmt::Display for BannerStyle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BannerStyle::Joined => write!(f, "joined"),
+            BannerStyle::Ascii => write!(f, "ascii"),
+        }
+    }
+}
+
 /// A single podcast with its feed URL, naming, and tag-override settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Podcast {
@@ -112,6 +134,8 @@ pub struct Config {
     pub default_podcast: Podcast,
     #[serde(default)]
     pub default_mode: DefaultMode,
+    #[serde(default)]
+    pub banner_style: BannerStyle,
 }
 
 /// Metadata for a single episode parsed from an RSS feed.

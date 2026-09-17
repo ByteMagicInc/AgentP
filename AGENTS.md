@@ -40,7 +40,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
   - `download.rs` — `download_selected_episodes` (async download + ID3 tagging); `sanitize_filename` shared `pub(crate)` helper
 - `ui/` — rendering, split per screen:
   - `theme.rs` — Dracula color palette
-  - `banner.rs` — the podcast-list banner: mascot and wordmark art, and `draw_banner`, which left-aligns them in a centered box and animates a one-shot typewriter reveal plus a periodic blink, both pure functions of `App::banner_started.elapsed()`
+  - `banner.rs` — the podcast-list banner: mascot art, both wordmarks, and `draw_banner`, which left-aligns them in a centered box and animates a one-shot typewriter reveal plus a periodic blink, both pure functions of `App::banner_started.elapsed()`. `banner_style` picks `WORDMARK_JOINED` (box-drawing strokes that meet across cell edges) or `WORDMARK_ASCII`; both place the letters in the same columns.
   - `widgets.rs` — shared helpers (`styled_block`, `key_hint`, `hint_bar`, `render_centered_dialog`, `format_date`)
   - `podcast_list.rs` — render podcast list screen
   - `episode_select.rs` — render episode selection with checkboxes
@@ -60,7 +60,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
 1. **PodcastList** — podcast list with latest-episode preview; `j/k` or arrows move, `Enter` opens episodes, `r` refresh feeds, `c` config, `e` edit selected podcast, `D` delete prompt (confirm with `y`/`D`, cancel `Esc`; `Enter` is excluded here because it opens a podcast on this screen and deletion is irreversible); `Home`/`g`, `End`/`G`, `PageUp`/`PageDown` jump and page
 2. **EpisodeSelect** — checkboxes per episode, `Space` toggle, `a` all, `s` sort, `o` open podcast folder, `Enter` download (if any selected), `Esc` back
 3. **Downloading** — progress gauge and log; `Esc` returns when finished or on error
-4. **Config** — menu: add podcast, download folder, new-podcast defaults, edit podcasts list, open `config.json`, open `podcasts.json`, open download folder; dialog and directory text-edit modes; `Esc` back to podcast list in navigate mode; `r` on download-folder row restores default path
+4. **Config** — menu: add podcast, download folder, default mode, banner style, new-podcast defaults, edit podcasts list, open `config.json`, open `podcasts.json`, open download folder; dialog and directory text-edit modes; `Esc` back to podcast list in navigate mode; `r` on download-folder row restores default path
 5. **EditPodcastSelect** — pick a podcast; `Enter` opens editor, `Esc` to config
 6. **EditPodcast** — field list for one podcast or template; text / bool / usize editing; `s` save, `r` restore field default, `R` reset all on the template, `Esc` discard in navigate mode; `Ctrl+C` exit with discard confirmation when dirty; `Ctrl+V` paste while editing text
 7. **AddPodcast** — multi-step wizard (`WIZARD_STEPS` in `add_podcast_wizard.rs`); first step is Feed URL; pressing Enter on it shows a **mode-select overlay** (`1`/`m` Manual, `2`/`p` Prepopulate from feed); Prepopulate fetches channel metadata and pre-fills Name, Album Name (sanitized), and Artist; `Esc` cancels/returns at each stage; `Ctrl+V` on text steps
@@ -84,7 +84,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
 
 **Data flow:**
 
-1. `load_config()` reads from `<home>/.config/AgentP/` (via `dirs`); on Windows the same relative path is typically `%USERPROFILE%\.config\AgentP\`. `config.json` holds `download_dir_location`, `default_podcast`, and `default_mode`; `podcasts.json` holds the podcast list. Missing files are created (demo podcasts from `example.podcasts.json` when appropriate). `example.podcasts.json` in the repo is the template for the podcast list shape.
+1. `load_config()` reads from `<home>/.config/AgentP/` (via `dirs`); on Windows the same relative path is typically `%USERPROFILE%\.config\AgentP\`. `config.json` holds `download_dir_location`, `default_podcast`, `default_mode`, and `banner_style`; `podcasts.json` holds the podcast list. Missing files are created (demo podcasts from `example.podcasts.json` when appropriate). `example.podcasts.json` in the repo is the template for the podcast list shape.
 2. On TUI startup, `spawn_latest_fetches` runs `get_last_podcast_name` per podcast on `tokio::spawn`; results arrive on an unbounded `mpsc` channel consumed with `try_recv` in the main loop.
 3. Choosing a podcast spawns `fetch_episode_list`; results arrive on a separate unbounded `mpsc` channel as `Ok(episodes)` / `Err`.
 4. `download_selected_episodes()` writes under `<download_dir>/<effective_album_name>/` with optional ID3 tags; `effective_album_name()` falls back to podcast name when album_name is empty. Progress uses `DownloadEvent` on `mpsc`.

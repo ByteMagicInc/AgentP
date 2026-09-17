@@ -201,7 +201,7 @@ mod tests {
     use ratatui::{Terminal, backend::TestBackend};
 
     use crate::app::Screen;
-    use crate::podcast::{Config, DefaultMode, EpisodeInfo, Podcast};
+    use crate::podcast::{BannerStyle, Config, DefaultMode, EpisodeInfo, Podcast};
 
     use super::*;
 
@@ -218,6 +218,7 @@ mod tests {
             }],
             default_podcast: Podcast::default(),
             default_mode: DefaultMode::default(),
+            banner_style: BannerStyle::default(),
         };
         let mut app = App::new(config, None);
         app.screen = Screen::EpisodeSelect;

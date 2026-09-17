@@ -166,7 +166,7 @@ Deleting is the one confirmation that does not take `Enter`. `Enter` opens a pod
 
 ### Config menu
 
-The menu has eight rows: **Add New Podcast**, **Download Folder**, **Default Mode**, **New Podcast Defaults**, **Edit Existing Podcasts**, **Open Config File**, **Open Podcasts Config File**, and **Open Download Folder**.
+The menu has nine rows: **Add New Podcast**, **Download Folder**, **Default Mode**, **Banner Style**, **New Podcast Defaults**, **Edit Existing Podcasts**, **Open Config File**, **Open Podcasts Config File**, and **Open Download Folder**.
 
 | Key | Action |
 |---|---|
@@ -248,6 +248,7 @@ agentp download --podcast 1 --all
 agentp config show
 agentp config set --download-dir ~/Podcasts
 agentp config set --default-mode cli
+agentp config set --banner-style ascii
 agentp config path
 
 agentp open downloads
@@ -261,8 +262,10 @@ agentp open podcast --podcast 1 --create
 
 Config lives under `$HOME/.config/AgentP/` (or `%USERPROFILE%\.config\AgentP\` on Windows). `agentp config path` prints the directory.
 
-- `config.json` — download folder, the `default_podcast` template, and `default_mode` (`tui` or `cli`)
+- `config.json` — download folder, the `default_podcast` template, `default_mode` (`tui` or `cli`), and `banner_style` (`joined` or `ascii`)
 - `podcasts.json` — your podcast list, as `{ "podcasts": [ ... ] }`
+
+`banner_style` picks the TUI banner wordmark: `joined` (the default) draws the letters with box-drawing characters and needs a terminal that draws those itself, such as Windows Terminal or kitty; `ascii` is the plain fallback for terminals that leave gaps between the strokes, Warp among them.
 
 ### Per-podcast options (`podcasts.json`)
 

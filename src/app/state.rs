@@ -124,7 +124,7 @@ pub fn apply_list_jump(state: &mut ListState, len: usize, floor: usize, code: Ke
 }
 
 /// Number of items in the config menu.
-pub const CONFIG_MENU_ITEM_COUNT: usize = 8;
+pub const CONFIG_MENU_ITEM_COUNT: usize = 9;
 /// Total number of editable fields in the podcast editor.
 pub const PODCAST_FIELD_COUNT: usize = 14;
 /// Index of the first boolean field in the podcast editor.
@@ -465,6 +465,7 @@ pub(crate) fn test_app_one_podcast() -> App {
         }],
         default_podcast: Podcast::default(),
         default_mode: crate::podcast::DefaultMode::default(),
+        banner_style: crate::podcast::BannerStyle::default(),
     };
     App::new(config, None)
 }
@@ -491,6 +492,7 @@ mod tests {
             ],
             default_podcast: Podcast::default(),
             default_mode: crate::podcast::DefaultMode::default(),
+            banner_style: crate::podcast::BannerStyle::default(),
         };
         App::new(config, None)
     }

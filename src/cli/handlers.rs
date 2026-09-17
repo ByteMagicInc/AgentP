@@ -366,6 +366,7 @@ fn run_config(command: ConfigCommand) -> Result<()> {
             let (config, _) = load_config()?;
             println!("download_dir:   {}", config.download_dir_location);
             println!("default_mode:   {}", config.default_mode);
+            println!("banner_style:   {}", config.banner_style);
             println!("podcasts:       {}", config.podcasts.len());
             println!();
             println!("Default podcast template:");
@@ -415,6 +416,9 @@ fn run_config(command: ConfigCommand) -> Result<()> {
             }
             if let Some(mode) = args.default_mode {
                 config.default_mode = mode;
+            }
+            if let Some(style) = args.banner_style {
+                config.banner_style = style;
             }
             save_config(&config)?;
             println!("Config updated.");
