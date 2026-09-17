@@ -82,7 +82,12 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
     ])
     .split(frame.area());
 
-    draw_banner(frame, chunks[0], app.banner_started.elapsed());
+    draw_banner(
+        frame,
+        chunks[0],
+        app.banner_started.elapsed(),
+        app.config.banner_style,
+    );
 
     if let Some(notice) = &app.config_notice {
         let notice_widget = Paragraph::new(Line::from(vec![
@@ -207,7 +212,7 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
 mod tests {
     use ratatui::{Terminal, backend::TestBackend};
 
-    use crate::podcast::{Config, DefaultMode, Podcast};
+    use crate::podcast::{BannerStyle, Config, DefaultMode, Podcast};
 
     use super::*;
 
@@ -294,6 +299,7 @@ mod tests {
                 .collect(),
             default_podcast: Podcast::default(),
             default_mode: DefaultMode::default(),
+            banner_style: BannerStyle::default(),
         };
         let mut app = App::new(config, None);
         app.latest_episodes = podcasts

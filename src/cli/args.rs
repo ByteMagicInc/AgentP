@@ -1,6 +1,6 @@
 use clap::{ArgGroup, Args, Parser, Subcommand};
 
-use crate::podcast::DefaultMode;
+use crate::podcast::{BannerStyle, DefaultMode};
 
 #[derive(Parser)]
 #[command(
@@ -194,6 +194,12 @@ pub struct ConfigSetArgs {
     pub download_dir: Option<String>,
     #[arg(long, value_enum, help = "Set the default launch mode (tui or cli)")]
     pub default_mode: Option<DefaultMode>,
+    #[arg(
+        long,
+        value_enum,
+        help = "Set the TUI banner wordmark (joined or ascii)"
+    )]
+    pub banner_style: Option<BannerStyle>,
 }
 
 #[derive(Subcommand)]

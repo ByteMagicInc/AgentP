@@ -51,10 +51,11 @@ pub(super) fn draw_config(frame: &mut Frame, app: &mut App) {
         String::new()
     };
 
-    let menu_labels: [&str; 8] = [
+    let menu_labels: [&str; 9] = [
         "  Add New Podcast         ",
         "  Download Folder         ",
         "  Default Mode:           ",
+        "  Banner Style:           ",
         "  New Podcast Defaults    ",
         "  Edit Existing Podcasts ",
         "  Open Config File        ",
@@ -83,13 +84,15 @@ pub(super) fn draw_config(frame: &mut Frame, app: &mut App) {
                     ));
                 }
                 ListItem::new(Line::from(spans))
-            } else if fi == 2 {
+            } else if fi == 2 || fi == 3 {
+                let value = if fi == 2 {
+                    app.config.default_mode.to_string()
+                } else {
+                    app.config.banner_style.to_string()
+                };
                 ListItem::new(Line::from(vec![
                     Span::styled(label.to_string(), Style::default().fg(label_color)),
-                    Span::styled(
-                        app.config.default_mode.to_string(),
-                        Style::default().fg(ORANGE),
-                    ),
+                    Span::styled(value, Style::default().fg(ORANGE)),
                     Span::styled("  →".to_string(), Style::default().fg(arrow_color)),
                 ]))
             } else {

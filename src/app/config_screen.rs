@@ -3,7 +3,7 @@
 use anyhow::Result;
 use ratatui::widgets::ListState;
 
-use crate::podcast::{DefaultMode, save_config};
+use crate::podcast::{BannerStyle, DefaultMode, save_config};
 
 use super::state::*;
 
@@ -45,15 +45,18 @@ impl App {
             2 => {
                 let _ = self.config_toggle_default_mode();
             }
-            3 => self.enter_template_editor(),
-            4 => self.enter_edit_podcast_select(),
-            5 => {
+            3 => {
+                let _ = self.config_toggle_banner_style();
+            }
+            4 => self.enter_template_editor(),
+            5 => self.enter_edit_podcast_select(),
+            6 => {
                 let _ = self.config_open_file();
             }
-            6 => {
+            7 => {
                 let _ = self.config_open_podcasts_file();
             }
-            7 => self.open_download_folder(),
+            8 => self.open_download_folder(),
             _ => {}
         }
     }
@@ -91,6 +94,15 @@ impl App {
         self.config.default_mode = match self.config.default_mode {
             DefaultMode::Tui => DefaultMode::Cli,
             DefaultMode::Cli => DefaultMode::Tui,
+        };
+        save_config(&self.config)?;
+        Ok(())
+    }
+
+    pub fn config_toggle_banner_style(&mut self) -> Result<()> {
+        self.config.banner_style = match self.config.banner_style {
+            BannerStyle::Joined => BannerStyle::Ascii,
+            BannerStyle::Ascii => BannerStyle::Joined,
         };
         save_config(&self.config)?;
         Ok(())

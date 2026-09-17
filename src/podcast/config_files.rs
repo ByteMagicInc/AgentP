@@ -7,7 +7,7 @@ use std::io::BufReader;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use super::data::{Config, DefaultMode, Podcast};
+use super::data::{BannerStyle, Config, DefaultMode, Podcast};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(super) struct ConfigFile {
@@ -16,6 +16,8 @@ pub(super) struct ConfigFile {
     default_podcast: Podcast,
     #[serde(default)]
     default_mode: DefaultMode,
+    #[serde(default)]
+    banner_style: BannerStyle,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +73,7 @@ pub fn save_config(config: &Config) -> Result<()> {
         download_dir_location: config.download_dir_location.clone(),
         default_podcast: config.default_podcast.clone(),
         default_mode: config.default_mode,
+        banner_style: config.banner_style,
     };
     fs::write(
         dir.join("config.json"),
@@ -103,6 +106,7 @@ pub fn load_config() -> Result<(Config, bool)> {
             download_dir_location: default_download_dir_location(),
             default_podcast: Podcast::default(),
             default_mode: DefaultMode::default(),
+            banner_style: BannerStyle::default(),
         };
         fs::write(&cfg_path, serde_json::to_string_pretty(&config_file)?)?;
         freshly_created = true;
@@ -132,6 +136,7 @@ pub fn load_config() -> Result<(Config, bool)> {
         podcasts: pods.podcasts,
         default_podcast: cfg.default_podcast,
         default_mode: cfg.default_mode,
+        banner_style: cfg.banner_style,
     };
     config
         .podcasts
@@ -164,6 +169,24 @@ mod tests {
             "config_path should end with config.json, got: {}",
             s
         );
+    }
+
+    #[test]
+    fn config_without_a_banner_style_keeps_loading_and_defaults_to_joined() {
+        let cfg: ConfigFile =
+            serde_json::from_str(r#"{"download_dir_location": "/tmp/pods"}"#).unwrap();
+        assert_eq!(cfg.banner_style, BannerStyle::Joined);
+    }
+
+    #[test]
+    fn banner_style_round_trips_through_json() {
+        let cfg: ConfigFile = serde_json::from_str(
+            r#"{"download_dir_location": "/tmp/pods", "banner_style": "ascii"}"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.banner_style, BannerStyle::Ascii);
+        let text = serde_json::to_string(&cfg).unwrap();
+        assert!(text.contains("\"banner_style\":\"ascii\""), "{text}");
     }
 
     #[test]
