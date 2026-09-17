@@ -14,6 +14,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::app::App;
 
+use super::banner::{BANNER_HEIGHT, draw_banner};
 use super::theme::*;
 use super::widgets::*;
 
@@ -70,7 +71,7 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
     let (hint_lines, status_height) = hint_bar(app, frame.area().width);
 
     let chunks = Layout::vertical([
-        Constraint::Length(11),
+        Constraint::Length(BANNER_HEIGHT),
         if has_notice {
             Constraint::Length(3)
         } else {
@@ -81,16 +82,7 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
     ])
     .split(frame.area());
 
-    let style = Style::default().fg(ACCENT).add_modifier(Modifier::BOLD);
-    let banner_lines: Vec<Line> = ASCII_ART_MIC
-        .iter()
-        .zip(ASCII_ART_TEXT.iter())
-        .map(|(&mic, &text)| Line::from(vec![Span::styled(mic, style), Span::styled(text, style)]))
-        .collect();
-    let banner = Paragraph::new(banner_lines)
-        .alignment(ratatui::layout::Alignment::Center)
-        .block(Block::default().padding(Padding::horizontal(2)));
-    frame.render_widget(banner, chunks[0]);
+    draw_banner(frame, chunks[0], app.banner_started.elapsed());
 
     if let Some(notice) = &app.config_notice {
         let notice_widget = Paragraph::new(Line::from(vec![

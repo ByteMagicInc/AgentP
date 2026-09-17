@@ -11,7 +11,7 @@ homepage = "https://github.com/ByteMagicInc/AgentP"
 readme = "README.md"
 keywords = ["podcast", "tui", "downloader", "rss", "id3"]
 categories = ["command-line-utilities", "multimedia::audio"]
-exclude = [".github/", ".claude/", ".cursor/", ".idea/", ".gitignore", "AGENTS.md", "CLAUDE.md", "cliff.toml", "docs/", "GO_LIVE.md", "release.toml"]
+exclude = [".github/", ".claude/", ".cursor/", ".idea/", ".gitignore", "AGENTS.md", "CLAUDE.md", "cliff.toml", "docs/", "release.toml"]
 
 [[bin]]
 name = "agentp"

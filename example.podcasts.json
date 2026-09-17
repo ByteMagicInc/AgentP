@@ -166,21 +166,6 @@
       "remove_images": false
     },
     {
-      "name": "Warning Shots",
-      "feed_url": "https://api.substack.com/feed/podcast/5979336/s/261558.rss",
-      "album_name": "Warning Shots",
-      "artist": "The AI Risk Network",
-      "overwrite_tags": true,
-      "overwrite_album_name": true,
-      "overwrite_artist": true,
-      "overwrite_title": true,
-      "overwrite_file_name": false,
-      "append_number_to_title": true,
-      "leading_zeros_amount": 2,
-      "remove_existing_tags": false,
-      "remove_images": false
-    },
-    {
       "name": "Nerd Snipe with Theo and Ben",
       "feed_url": "https://anchor.fm/s/1112097e0/podcast/rss",
       "album_name": "Nerd Snipe with Theo and Ben",
@@ -425,21 +410,6 @@
       "feed_url": "https://anchor.fm/s/db2a6d50/podcast/rss",
       "album_name": "Empires - An Asian Business Podcast",
       "artist": "1UpMedia",
-      "overwrite_tags": true,
-      "overwrite_album_name": true,
-      "overwrite_artist": true,
-      "overwrite_title": true,
-      "overwrite_file_name": false,
-      "append_number_to_title": true,
-      "leading_zeros_amount": 3,
-      "remove_existing_tags": false,
-      "remove_images": false
-    },
-    {
-      "name": "Wading Through AI",
-      "feed_url": "https://api.substack.com/feed/podcast/865289/s/339273.rss",
-      "album_name": "Wading Through AI",
-      "artist": "Casey Muratori and Demetri Spanos",
       "overwrite_tags": true,
       "overwrite_album_name": true,
       "overwrite_artist": true,

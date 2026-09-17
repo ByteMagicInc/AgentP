@@ -335,7 +335,7 @@ cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo
 
 ## Contributing
 
-Issues and PRs welcome at <https://github.com/ByteMagicInc/AgentP>. See [AGENTS.md](AGENTS.md) for architecture details. Start commit messages with `Fix`, `Add`, `Refactor`, or `Update` so the changelog groups them correctly. Maintainers: [GO_LIVE.md](GO_LIVE.md) covers tagging a release, which builds binaries for six targets and publishes to crates.io, Homebrew, and Scoop.
+Issues and PRs welcome at <https://github.com/ByteMagicInc/AgentP>. See [AGENTS.md](AGENTS.md) for architecture details. Start commit messages with `Fix`, `Add`, `Refactor`, or `Update` so the changelog groups them correctly.
 
 ## License
 

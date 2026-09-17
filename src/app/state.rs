@@ -1,5 +1,7 @@
 //! Core application state, screen enum, and episode/download logic.
 
+use std::time::Instant;
+
 use crossterm::event::KeyCode;
 use ratatui::widgets::ListState;
 
@@ -184,6 +186,7 @@ pub struct App {
     pub add_podcast: AddPodcastState,
     pub pending_open_folder: Option<String>,
     pub hint_bar_expanded: bool,
+    pub banner_started: Instant,
 }
 
 impl App {
@@ -256,6 +259,7 @@ impl App {
             },
             pending_open_folder: None,
             hint_bar_expanded: false,
+            banner_started: Instant::now(),
         }
     }
 
