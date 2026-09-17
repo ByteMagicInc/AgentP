@@ -5,57 +5,95 @@
 use std::time::Duration;
 
 use ratatui::{
+    Frame,
+    layout::{Constraint, Flex, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
+    widgets::{Block, Padding, Paragraph},
 };
 
 use super::theme::*;
 
+const MIC: [&str; 6] = [
+    " ▄██████▄ ",
+    " █ ▀  ▀ █ ",
+    " █ ▀▄▄▀ █ ",
+    " ▀██▄▄██▀ ",
+    "    ██    ",
+    "  ▄████▄  ",
+];
+
+const WORDMARK: [&str; 6] = [
+    "   _                    _   ____",
+    "  / \\   __ _  ___ _ __ | |_|  _ \\",
+    " / _ \\ / _` |/ _ \\ '_ \\| __| |_) |",
+    "/ ___ \\ (_| |  __/ | | | |_|  __/",
+    "/_/   \\_\\__, |\\___|_| |_|\\__|_|",
+    "        |___/",
+];
+
+const EYES_ROW: usize = 1;
+const VERTICAL_PADDING: u16 = 1;
 const REVEAL_COLUMNS_PER_SECOND: u128 = 50;
 const BLINK_PERIOD_MS: u128 = 4000;
 const BLINK_CLOSED_MS: u128 = 150;
 
-/// How many columns of the wordmark are visible after `elapsed` since startup.
-pub fn revealed_columns(elapsed: Duration, total: usize) -> usize {
-    let columns = elapsed.as_millis() * REVEAL_COLUMNS_PER_SECOND / 1000;
-    usize::try_from(columns).unwrap_or(usize::MAX).min(total)
+/// Rows the banner occupies, padding included.
+pub(super) const BANNER_HEIGHT: u16 = MIC.len() as u16 + 2 * VERTICAL_PADDING;
+
+fn widest(rows: &[&str]) -> usize {
+    rows.iter()
+        .map(|row| row.chars().count())
+        .max()
+        .unwrap_or(0)
 }
 
-/// Whether the mascot's eyes are closed at `elapsed` since startup.
-pub fn eyes_closed(elapsed: Duration) -> bool {
-    let phase = elapsed.as_millis() % BLINK_PERIOD_MS;
-    phase >= BLINK_PERIOD_MS - BLINK_CLOSED_MS
+fn revealed_columns(elapsed: Duration) -> usize {
+    (elapsed.as_millis() * REVEAL_COLUMNS_PER_SECOND / 1000) as usize
 }
 
-/// The banner rows for `elapsed` since startup.
-pub fn banner_lines(elapsed: Duration) -> Vec<Line<'static>> {
+fn eyes_closed(elapsed: Duration) -> bool {
+    elapsed.as_millis() % BLINK_PERIOD_MS >= BLINK_PERIOD_MS - BLINK_CLOSED_MS
+}
+
+fn prefix(row: &'static str, columns: usize) -> &'static str {
+    row.char_indices()
+        .nth(columns)
+        .map_or(row, |(byte, _)| &row[..byte])
+}
+
+fn banner_lines(elapsed: Duration) -> Vec<Line<'static>> {
     let mic_style = Style::default().fg(ACCENT).add_modifier(Modifier::BOLD);
     let text_style = Style::default().fg(TITLE_FG);
+    let visible = revealed_columns(elapsed);
     let closed = eyes_closed(elapsed);
-    let width = ASCII_ART_TEXT[0].chars().count();
-    let visible = revealed_columns(elapsed, width);
 
-    ASCII_ART_MIC
-        .iter()
+    MIC.iter()
+        .zip(WORDMARK)
         .enumerate()
-        .zip(ASCII_ART_TEXT.iter())
-        .map(|((row, &mic), &text)| {
-            let mic = if closed && row == ASCII_ART_MIC_EYES_ROW {
-                ASCII_ART_MIC_EYES_CLOSED
+        .map(|(row, (&mic, text))| {
+            let mic = if closed && row == EYES_ROW {
+                Span::styled(mic.replace('▀', "─"), mic_style)
             } else {
-                mic
+                Span::styled(mic, mic_style)
             };
-            let text: String = text
-                .chars()
-                .enumerate()
-                .map(|(column, ch)| if column < visible { ch } else { ' ' })
-                .collect();
-            Line::from(vec![
-                Span::styled(mic, mic_style),
-                Span::styled(text, text_style),
-            ])
+            Line::from(vec![mic, Span::styled(prefix(text, visible), text_style)])
         })
         .collect()
+}
+
+/// Draw the banner centered in `area` as it looks `elapsed` after startup.
+///
+/// The lines are left-aligned inside a box as wide as the finished art, so rows
+/// of different lengths and the growing reveal never shift horizontally.
+pub(super) fn draw_banner(frame: &mut Frame, area: Rect, elapsed: Duration) {
+    let width = (widest(&MIC) + widest(&WORDMARK)) as u16;
+    let [area] = Layout::horizontal([Constraint::Length(width)])
+        .flex(Flex::Center)
+        .areas(area);
+    let banner = Paragraph::new(banner_lines(elapsed))
+        .block(Block::default().padding(Padding::vertical(VERTICAL_PADDING)));
+    frame.render_widget(banner, area);
 }
 
 #[cfg(test)]
@@ -63,15 +101,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reveal_starts_empty_and_completes_within_a_second() {
-        assert_eq!(revealed_columns(Duration::ZERO, 35), 0);
-        assert_eq!(revealed_columns(Duration::from_millis(100), 35), 5);
-        assert_eq!(revealed_columns(Duration::from_secs(1), 35), 35);
-        assert_eq!(revealed_columns(Duration::from_secs(3600), 35), 35);
+    fn mic_rows_share_one_width_so_the_wordmark_starts_in_one_column() {
+        let width = widest(&MIC);
+        assert!(MIC.iter().all(|row| row.chars().count() == width));
     }
 
     #[test]
-    fn eyes_open_at_startup_and_close_briefly_each_period() {
+    fn reveal_types_the_wordmark_in_one_column_at_a_time() {
+        assert_eq!(prefix(WORDMARK[1], revealed_columns(Duration::ZERO)), "");
+        assert_eq!(
+            prefix(WORDMARK[1], revealed_columns(Duration::from_millis(100))),
+            "  / \\"
+        );
+        assert_eq!(
+            prefix(WORDMARK[1], revealed_columns(Duration::from_secs(1))),
+            WORDMARK[1]
+        );
+    }
+
+    #[test]
+    fn eyes_close_briefly_at_the_end_of_each_period() {
         assert!(!eyes_closed(Duration::ZERO));
         assert!(!eyes_closed(Duration::from_millis(3849)));
         assert!(eyes_closed(Duration::from_millis(3850)));
@@ -80,45 +129,12 @@ mod tests {
     }
 
     #[test]
-    fn art_rows_share_one_width_so_centering_cannot_skew_them() {
-        let mic_width = ASCII_ART_MIC[0].chars().count();
-        assert!(
-            ASCII_ART_MIC
-                .iter()
-                .all(|row| row.chars().count() == mic_width)
-        );
-        assert_eq!(ASCII_ART_MIC_EYES_CLOSED.chars().count(), mic_width);
-        let text_width = ASCII_ART_TEXT[0].chars().count();
-        assert!(
-            ASCII_ART_TEXT
-                .iter()
-                .all(|row| row.chars().count() == text_width)
-        );
-    }
-
-    #[test]
-    fn banner_rows_keep_their_width_during_the_reveal() {
-        let full_width = ASCII_ART_MIC[0].chars().count() + ASCII_ART_TEXT[0].chars().count();
-        for elapsed in [
-            Duration::ZERO,
-            Duration::from_millis(300),
-            Duration::from_secs(5),
-        ] {
-            let lines = banner_lines(elapsed);
-            assert_eq!(lines.len(), ASCII_ART_MIC.len());
-            for line in lines {
-                assert_eq!(line.width(), full_width);
-            }
-        }
-    }
-
-    #[test]
-    fn eyes_row_swaps_only_while_blinking() {
-        let open = banner_lines(Duration::ZERO);
+    fn blinking_changes_only_the_eyes_row() {
+        let open = banner_lines(Duration::from_secs(1));
         let closed = banner_lines(Duration::from_millis(3900));
-        let row = ASCII_ART_MIC_EYES_ROW;
-        assert_eq!(open[row].spans[0].content, ASCII_ART_MIC[row]);
-        assert_eq!(closed[row].spans[0].content, ASCII_ART_MIC_EYES_CLOSED);
-        assert_eq!(closed[row + 1].spans[0].content, ASCII_ART_MIC[row + 1]);
+        for row in 0..MIC.len() {
+            assert_eq!(open[row] == closed[row], row != EYES_ROW);
+        }
+        assert_eq!(closed[EYES_ROW].width(), open[EYES_ROW].width());
     }
 }
