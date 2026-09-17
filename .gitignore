@@ -5,3 +5,4 @@ target/
 agent-p.iml
 .claude/settings.local.json
 config.json
+__pycache__/
