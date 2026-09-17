@@ -40,7 +40,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
   - `download.rs` — `download_selected_episodes` (async download + ID3 tagging); `sanitize_filename` shared `pub(crate)` helper
 - `ui/` — rendering, split per screen:
   - `theme.rs` — Dracula color palette
-  - `banner.rs` — the podcast-list banner: mascot art plus both wordmarks, and `draw_banner`, which left-aligns them in a centered box and animates a one-shot typewriter reveal plus a periodic blink, both pure functions of `App::banner_started.elapsed()`. `WORDMARK_JOINED` draws the letters with box-drawing characters whose strokes meet across cell edges; `WORDMARK_ASCII` is the plain fallback, chosen by `banner_style` in `config.json`. Both arrays place the letters in the same columns.
+  - `banner.rs` — the podcast-list banner: mascot art, both wordmarks, and `draw_banner`, which left-aligns them in a centered box and animates a one-shot typewriter reveal plus a periodic blink, both pure functions of `App::banner_started.elapsed()`. `banner_style` picks `WORDMARK_JOINED` (box-drawing strokes that meet across cell edges) or `WORDMARK_ASCII`; both place the letters in the same columns.
   - `widgets.rs` — shared helpers (`styled_block`, `key_hint`, `hint_bar`, `render_centered_dialog`, `format_date`)
   - `podcast_list.rs` — render podcast list screen
   - `episode_select.rs` — render episode selection with checkboxes

@@ -265,11 +265,7 @@ Config lives under `$HOME/.config/AgentP/` (or `%USERPROFILE%\.config\AgentP\` o
 - `config.json` — download folder, the `default_podcast` template, `default_mode` (`tui` or `cli`), and `banner_style` (`joined` or `ascii`)
 - `podcasts.json` — your podcast list, as `{ "podcasts": [ ... ] }`
 
-`banner_style` controls the wordmark in the TUI banner. The default, `joined`, draws the letters with box-drawing characters whose strokes meet, which needs a terminal that draws those characters itself, such as Windows Terminal, kitty, WezTerm, Alacritty, Ghostty, foot or the VS Code terminal. Terminals that take those characters from the font, Warp and the classic Windows console among them, leave gaps between the strokes. If the banner looks broken, switch it:
-
-```bash
-agentp config set --banner-style ascii
-```
+`banner_style` picks the TUI banner wordmark: `joined` (the default) draws the letters with box-drawing characters and needs a terminal that draws those itself, such as Windows Terminal or kitty; `ascii` is the plain fallback for terminals that leave gaps between the strokes, Warp among them.
 
 ### Per-podcast options (`podcasts.json`)
 

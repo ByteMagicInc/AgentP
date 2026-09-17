@@ -90,22 +90,24 @@ impl App {
         Ok(())
     }
 
+    /// Both toggles put the old value back when the save fails, so the screen
+    /// never shows a setting that is not on disk.
     pub fn config_toggle_default_mode(&mut self) -> Result<()> {
-        self.config.default_mode = match self.config.default_mode {
+        let previous = self.config.default_mode;
+        self.config.default_mode = match previous {
             DefaultMode::Tui => DefaultMode::Cli,
             DefaultMode::Cli => DefaultMode::Tui,
         };
-        save_config(&self.config)?;
-        Ok(())
+        save_config(&self.config).inspect_err(|_| self.config.default_mode = previous)
     }
 
     pub fn config_toggle_banner_style(&mut self) -> Result<()> {
-        self.config.banner_style = match self.config.banner_style {
+        let previous = self.config.banner_style;
+        self.config.banner_style = match previous {
             BannerStyle::Joined => BannerStyle::Ascii,
             BannerStyle::Ascii => BannerStyle::Joined,
         };
-        save_config(&self.config)?;
-        Ok(())
+        save_config(&self.config).inspect_err(|_| self.config.banner_style = previous)
     }
 
     pub fn config_confirm_dir_change(&mut self) -> Result<()> {
