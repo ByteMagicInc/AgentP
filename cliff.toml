@@ -1,0 +1,42 @@
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+"""
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\\n") | first | upper_first }}\
+{% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = false
+filter_unconventional = false
+split_commits = false
+commit_parsers = [
+  { message = "^[Ff]ix", group = "Bug Fixes" },
+  { message = "^[Aa]dd", group = "Features" },
+  { message = "^[Rr]efactor", group = "Refactoring" },
+  { message = "^[Rr]edesign", group = "Refactoring" },
+  { message = "^[Cc]lean", group = "Refactoring" },
+  { message = "^[Ss]plit", group = "Refactoring" },
+  { message = "^[Uu]pdate", group = "Changes" },
+  { message = "^[Mm]erge", group = "Other" },
+  { message = ".*", group = "Changes" },
+]
+filter_commits = false
+tag_pattern = "v[0-9]*"
+topo_order = false
+sort_commits = "oldest"

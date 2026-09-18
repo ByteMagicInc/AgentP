@@ -1,0 +1,351 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+  PACKAGE_NAME: agent-p
+  EXECUTABLE_NAME: agentp
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify tag & run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check tag matches Cargo.toml
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          MANIFEST=$(cargo metadata --format-version 1 --no-deps \
+            | python3 -c "import json,sys; m=json.load(sys.stdin); print(next(p['version'] for p in m['packages'] if p['name']=='agent-p'))")
+          if [[ "$TAG" != "$MANIFEST" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match Cargo.toml version $MANIFEST" >&2
+            exit 1
+          fi
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all --locked
+      - name: Extract release notes from changelog
+        shell: python
+        run: |
+          import os
+          import re
+          from pathlib import Path
+
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          changelog = Path("CHANGELOG.md").read_text()
+          sections = re.findall(
+              rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}\n(.*?)(?=^## |\Z)",
+              changelog,
+              re.MULTILINE | re.DOTALL,
+          )
+          if len(sections) != 1 or not sections[0].strip():
+              raise SystemExit(f"Expected one nonempty CHANGELOG.md entry for {version}")
+          Path("RELEASE_NOTES.md").write_text(sections[0].strip() + "\n")
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          if-no-files-found: error
+
+  build-binaries:
+    name: Build ${{ matrix.target }}
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: false
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            archive: tar.gz
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-14
+            archive: tar.gz
+            cross: false
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            cross: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build
+        shell: bash
+        run: |
+          if [[ "${{ matrix.cross }}" == "true" ]]; then
+            cross build --release --locked --target ${{ matrix.target }}
+          else
+            cargo build --release --locked --target ${{ matrix.target }}
+          fi
+
+      - name: Package (unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          STAGE="${PACKAGE_NAME}-${TAG}-${{ matrix.target }}"
+          mkdir -p "dist/${STAGE}"
+          cp "target/${{ matrix.target }}/release/${EXECUTABLE_NAME}" "dist/${STAGE}/"
+          cp README.md LICENSE "dist/${STAGE}/"
+          (cd dist && tar czf "${STAGE}.tar.gz" "${STAGE}")
+          echo "ASSET=dist/${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $stage = "$env:PACKAGE_NAME-$tag-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path "dist/$stage" | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/$env:EXECUTABLE_NAME.exe" "dist/$stage/"
+          Copy-Item README.md,LICENSE "dist/$stage/"
+          Compress-Archive -Path "dist/$stage/*" -DestinationPath "dist/$stage.zip"
+          "ASSET=dist/$stage.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ github.ref_name }}-${{ matrix.target }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: agent-p-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Detect prerelease
+        id: prerelease
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts/*
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ steps.prerelease.outputs.value == 'true' }}
+
+  publish-crate:
+    name: Publish to crates.io
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo publish --locked --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew tap
+    needs: create-release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: agent-p-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Compute SHA256 hashes
+        id: hashes
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          MAC_INTEL="${PACKAGE_NAME}-${TAG}-x86_64-apple-darwin.tar.gz"
+          MAC_ARM="${PACKAGE_NAME}-${TAG}-aarch64-apple-darwin.tar.gz"
+          LINUX_INTEL="${PACKAGE_NAME}-${TAG}-x86_64-unknown-linux-gnu.tar.gz"
+          LINUX_ARM="${PACKAGE_NAME}-${TAG}-aarch64-unknown-linux-gnu.tar.gz"
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "mac_intel_sha=$(sha256sum artifacts/${MAC_INTEL} | cut -d' ' -f1)"
+            echo "mac_arm_sha=$(sha256sum artifacts/${MAC_ARM} | cut -d' ' -f1)"
+            echo "linux_intel_sha=$(sha256sum artifacts/${LINUX_INTEL} | cut -d' ' -f1)"
+            echo "linux_arm_sha=$(sha256sum artifacts/${LINUX_ARM} | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap
+        uses: actions/checkout@v7
+        with:
+          repository: ByteMagicInc/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Write formula
+        shell: bash
+        run: |
+          mkdir -p tap/Formula
+          cat > tap/Formula/agent-p.rb <<EOF
+          class AgentP < Formula
+            desc "A fast podcast downloader with customizable ID3 tagging"
+            homepage "https://github.com/ByteMagicInc/AgentP"
+            version "${{ steps.hashes.outputs.version }}"
+            license "GPL-3.0-only"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/ByteMagicInc/AgentP/releases/download/${{ steps.hashes.outputs.tag }}/agent-p-${{ steps.hashes.outputs.tag }}-aarch64-apple-darwin.tar.gz"
+                sha256 "${{ steps.hashes.outputs.mac_arm_sha }}"
+              else
+                url "https://github.com/ByteMagicInc/AgentP/releases/download/${{ steps.hashes.outputs.tag }}/agent-p-${{ steps.hashes.outputs.tag }}-x86_64-apple-darwin.tar.gz"
+                sha256 "${{ steps.hashes.outputs.mac_intel_sha }}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/ByteMagicInc/AgentP/releases/download/${{ steps.hashes.outputs.tag }}/agent-p-${{ steps.hashes.outputs.tag }}-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "${{ steps.hashes.outputs.linux_arm_sha }}"
+              else
+                url "https://github.com/ByteMagicInc/AgentP/releases/download/${{ steps.hashes.outputs.tag }}/agent-p-${{ steps.hashes.outputs.tag }}-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${{ steps.hashes.outputs.linux_intel_sha }}"
+              end
+            end
+
+            def install
+              bin.install "agentp"
+            end
+
+            test do
+              system "#{bin}/agentp", "--help"
+            end
+          end
+          EOF
+
+      - name: Commit & push
+        shell: bash
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/agent-p.rb
+          git commit -m "agent-p ${{ steps.hashes.outputs.version }}"
+          git push
+
+  update-scoop:
+    name: Update Scoop bucket
+    needs: create-release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: agent-p-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Compute SHA256 hash
+        id: hashes
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          WIN="${PACKAGE_NAME}-${TAG}-x86_64-pc-windows-msvc.zip"
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "win_sha=$(sha256sum artifacts/${WIN} | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout bucket
+        uses: actions/checkout@v7
+        with:
+          repository: ByteMagicInc/scoop-bucket
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: bucket
+
+      - name: Write manifest
+        shell: bash
+        run: |
+          cat > bucket/agent-p.json <<EOF
+          {
+            "version": "${{ steps.hashes.outputs.version }}",
+            "description": "A fast podcast downloader with customizable ID3 tagging",
+            "homepage": "https://github.com/ByteMagicInc/AgentP",
+            "license": "GPL-3.0-only",
+            "architecture": {
+              "64bit": {
+                "url": "https://github.com/ByteMagicInc/AgentP/releases/download/${{ steps.hashes.outputs.tag }}/agent-p-${{ steps.hashes.outputs.tag }}-x86_64-pc-windows-msvc.zip",
+                "hash": "${{ steps.hashes.outputs.win_sha }}"
+              }
+            },
+            "bin": "agentp.exe",
+            "checkver": {
+              "github": "https://github.com/ByteMagicInc/AgentP"
+            },
+            "autoupdate": {
+              "architecture": {
+                "64bit": {
+                  "url": "https://github.com/ByteMagicInc/AgentP/releases/download/v\$version/agent-p-v\$version-x86_64-pc-windows-msvc.zip"
+                }
+              }
+            }
+          }
+          EOF
+
+      - name: Commit & push
+        shell: bash
+        working-directory: bucket
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add agent-p.json
+          git commit -m "agent-p ${{ steps.hashes.outputs.version }}"
+          git push

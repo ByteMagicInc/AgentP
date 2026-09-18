@@ -1,0 +1,12 @@
+{
+  "download_dir_location": "~/Downloads/Podcasts",
+  "overwrite_tags": true,
+  "remove_existing_tags": false,
+  "remove_images": false,
+  "overwrite_album_name": true,
+  "overwrite_artist": true,
+  "overwrite_title": true,
+  "overwrite_file_name": false,
+  "append_number_to_title": true,
+  "leading_zeros_amount": 3
+}
