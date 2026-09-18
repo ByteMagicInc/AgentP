@@ -38,7 +38,7 @@
 |---|---|
 | **Homebrew** · macOS and Linux | `brew install ByteMagicInc/tap/agent-p` |
 | **Scoop** · Windows | `scoop bucket add bytemagicinc https://github.com/ByteMagicInc/scoop-bucket`<br>`scoop install agent-p` |
-| **Cargo** · Rust 1.87+ | `cargo install agent-p` |
+| **Cargo** · Rust 1.88+ | `cargo install agent-p --locked` |
 | **Pre-built binary** | Download an archive from [GitHub Releases](https://github.com/ByteMagicInc/AgentP/releases) and place `agentp` on your `PATH`. |
 
 > [!TIP]
@@ -59,6 +59,8 @@ The first launch creates your configuration, seeds a set of demo podcasts, and p
 3. Press `Enter` to download.
 
 Press `c` to add your own feeds, change the download folder, and set the defaults for new podcasts.
+
+AgentP comes with my favorite podcasts so you can see how different per-podcast configs are applied.
 
 ### Scriptable CLI
 
@@ -322,12 +324,12 @@ When `overwrite_tags` is on, AgentP writes the title, album, and artist plus alb
 
 ## Building from source
 
-Requires Rust 1.87+ (edition 2024). The binary lands at `target/release/agentp`.
+Requires Rust 1.88+ (edition 2024). The binary lands at `target/release/agentp`.
 
 ```sh
 git clone https://github.com/ByteMagicInc/AgentP.git
 cd AgentP
-cargo build --release
+cargo build --release --locked
 ```
 
 Before opening a pull request, run what CI runs:
@@ -339,6 +341,8 @@ cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo
 ## Contributing
 
 Issues and PRs welcome at <https://github.com/ByteMagicInc/AgentP>. See [AGENTS.md](AGENTS.md) for architecture details. Start commit messages with `Fix`, `Add`, `Refactor`, or `Update` so the changelog groups them correctly.
+
+Maintainers: see the short [release guide](docs/releasing.md).
 
 ## License
 

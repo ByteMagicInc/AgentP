@@ -2,7 +2,7 @@
 name = "agent-p"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.87"
+rust-version = "1.88"
 authors = ["ByteMagic Inc <copyright@bytemagic.xyz>"]
 description = "A fast podcast downloader with customizable ID3 tagging"
 license = "GPL-3.0-only"
