@@ -340,7 +340,7 @@ cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo
 
 ## Contributing
 
-Issues and PRs welcome at <https://github.com/ByteMagicInc/AgentP>. Read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution terms, including copyright assignment, and [AGENTS.md](AGENTS.md) for architecture details. Start commit messages with `Fix`, `Add`, `Refactor`, or `Update` so the changelog groups them correctly.
+Issues and PRs welcome at <https://github.com/ByteMagicInc/AgentP>. Read [CONTRIBUTING.md](CONTRIBUTING.md) before you contribute and [AGENTS.md](AGENTS.md) for architecture details. Start commit messages with `Fix`, `Add`, `Refactor`, or `Update` so the changelog groups them correctly.
 
 Maintainers: see the short [release guide](docs/releasing.md).
 
