@@ -342,43 +342,7 @@ cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo
 
 Issues and PRs welcome at <https://github.com/ByteMagicInc/AgentP>. See [AGENTS.md](AGENTS.md) for architecture details. Start commit messages with `Fix`, `Add`, `Refactor`, or `Update` so the changelog groups them correctly.
 
-## Releasing (maintainers)
-
-Pushing a `v*` tag starts the release workflow: it verifies the version and changelog, runs checks, builds six platform archives, creates a public GitHub release using the matching `CHANGELOG.md` entry, publishes to crates.io, and updates Homebrew and Scoop for stable versions.
-
-Before the first release:
-
-1. Configure the repository Actions secret `CARGO_REGISTRY_TOKEN` with permission to publish `agent-p` on crates.io; confirm the crate name is available or owned by the publishing account.
-2. Ensure `ByteMagicInc/homebrew-tap` and `ByteMagicInc/scoop-bucket` exist with initialized default branches. Configure `TAP_GITHUB_TOKEN` with contents read/write access to both repositories.
-3. Confirm Actions can create releases in this repository and that CI passes on the exact commit being released.
-4. Review the `0.1.0` changelog entry and set its date to the actual release date. Keep `Cargo.toml` and `Cargo.lock` at `0.1.0`.
-5. Run the local checks and packaging verification:
-
-   ```sh
-   cargo fmt --all -- --check
-   cargo clippy --all-targets --all-features --locked -- -D warnings
-   cargo test --all --locked
-   cargo package --locked
-   ```
-
-Once the release preparation is committed and pushed to `master`, tag that commit directly for the first release:
-
-```sh
-git switch master
-git pull --ff-only
-git tag -a v0.1.0 -m "Release 0.1.0"
-git push origin v0.1.0
-```
-
-**The tag push publishes externally.** Do it only when ready to ship, then check every release job, the attached archives, and the package-manager installs. Do not run `cargo release` for this first tag: `0.1.0` is already versioned and has its own changelog entry.
-
-For later releases, record changes under **Unreleased**, preview `cargo release patch` (or `minor`/`major`), and use `--execute` only after reviewing the dry run. `release.toml` updates the version and changelog, tags, and pushes; the GitHub workflow handles publishing. `git-cliff` can help draft notes, but the reviewed changelog is the source for published release notes.
-
-### Drafting the changelog
-
-Install the maintainer tools with `cargo install cargo-release git-cliff --locked`. Run `git-cliff --unreleased --strip header` to print a draft from commits since the latest release tag, grouped by the rules in `cliff.toml`. Review and copy the relevant bullets into the existing **Unreleased** section; do not overwrite the curated changelog or remove its `<!-- next-header -->` marker.
-
-On later releases, `cargo release` turns **Unreleased** into the versioned, dated entry and inserts a new empty **Unreleased** section. The GitHub workflow extracts that version's entry verbatim rather than regenerating notes from commits, and rejects missing, empty, or duplicate entries.
+Maintainers: see the short [release guide](docs/releasing.md).
 
 ## License
 
