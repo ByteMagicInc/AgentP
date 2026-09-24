@@ -335,7 +335,7 @@ cargo build --release --locked
 CI runs automatically only when a release is tagged, so before opening a pull request run the same checks locally:
 
 ```sh
-cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --all --locked
+cargo fmt --all -- --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --all --locked
 ```
 
 ## Contributing
