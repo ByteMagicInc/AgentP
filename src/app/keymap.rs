@@ -120,10 +120,15 @@ pub enum Action {
 
     GoToConfig,
     GoToPodcastList,
+    GoToAbout,
+    AboutBack,
+    OpenIssue,
+    CopyVersionInfo,
     RefreshFeeds,
     AddPodcast,
     OpenDownloadFolder,
     OpenPodcastFolder,
+    OpenRepository,
     MovePodcastUp,
     MovePodcastDown,
 
@@ -318,6 +323,7 @@ pub enum KeyContext {
     WizardText,
     WizardBool,
     WizardUsize,
+    About,
 }
 
 /// Every context, for the invariant tests.
@@ -344,6 +350,7 @@ pub const ALL_CONTEXTS: &[KeyContext] = &[
     KeyContext::WizardText,
     KeyContext::WizardBool,
     KeyContext::WizardUsize,
+    KeyContext::About,
 ];
 
 impl KeyContext {
@@ -1083,6 +1090,47 @@ static WIZARD_BOOL_BINDINGS: &[&Binding] = &[
 static WIZARD_USIZE_BINDINGS: &[&Binding] =
     &[&WIZARD_ADJUST, &WIZARD_NEXT, &WIZARD_PREV, &WIZARD_CANCEL];
 
+static ABOUT_OPEN_ISSUE: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Report issue")),
+    keys: &[(Key::ch('i'), Action::OpenIssue)],
+    enabled: None,
+    hint_when: None,
+};
+
+static ABOUT_COPY_VERSION: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Copy version")),
+    keys: &[(Key::ch('c'), Action::CopyVersionInfo)],
+    enabled: None,
+    hint_when: None,
+};
+
+static ABOUT_OPEN_REPOSITORY: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Star repo")),
+    keys: &[(Key::ch('o'), Action::OpenRepository)],
+    enabled: None,
+    hint_when: None,
+};
+
+static ABOUT_BACK: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Back")),
+    keys: &[(Key::plain(KeyCode::Esc), Action::AboutBack)],
+    enabled: None,
+    hint_when: None,
+};
+
+static ABOUT_BINDINGS: &[&Binding] = &[
+    &ABOUT_OPEN_ISSUE,
+    &ABOUT_COPY_VERSION,
+    &ABOUT_OPEN_REPOSITORY,
+    &ABOUT_BACK,
+    &COMMAND_PALETTE,
+    &QUIT,
+];
+
 /// The bindings a context offers, in the order the hint bar shows them.
 pub fn context_bindings(context: KeyContext) -> &'static [&'static Binding] {
     match context {
@@ -1105,6 +1153,7 @@ pub fn context_bindings(context: KeyContext) -> &'static [&'static Binding] {
         KeyContext::WizardText => WIZARD_TEXT_BINDINGS,
         KeyContext::WizardBool => WIZARD_BOOL_BINDINGS,
         KeyContext::WizardUsize => WIZARD_USIZE_BINDINGS,
+        KeyContext::About => ABOUT_BINDINGS,
     }
 }
 
@@ -1219,6 +1268,7 @@ impl App {
                     }
                 }
             }
+            Screen::About => KeyContext::About,
         }
     }
 }
@@ -1526,6 +1576,24 @@ mod tests {
                 ("Enter", "Save"),
                 ("Backspace", "Back"),
                 ("Esc", "Cancel"),
+            ],
+        );
+    }
+
+    #[test]
+    fn about_hints() {
+        let mut app = test_app();
+        app.enter_about();
+        assert_eq!(app.hint_context(), KeyContext::About);
+        assert_hints(
+            &app,
+            &[
+                ("i", "Report issue"),
+                ("c", "Copy version"),
+                ("o", "Star repo"),
+                ("Esc", "Back"),
+                ("Ctrl+K", "Command Palette"),
+                ("q", "Quit"),
             ],
         );
     }
