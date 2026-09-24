@@ -95,7 +95,11 @@ pub(super) fn draw_about(frame: &mut Frame, app: &mut App) {
             Style::default().fg(TEXT_DIM).italic(),
         ),
     ];
-    let content_width = info_width.max(spans_width(&tagline));
+    let notice_width = app
+        .about_notice
+        .as_deref()
+        .map_or(0, UnicodeWidthStr::width);
+    let content_width = info_width.max(spans_width(&tagline)).max(notice_width);
     let info_pad = content_width.saturating_sub(info_width) / 2;
     let pad_spans = |spans: Vec<Span<'static>>| {
         let mut padded = vec![Span::raw(" ".repeat(info_pad))];

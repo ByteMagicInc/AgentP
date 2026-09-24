@@ -190,6 +190,8 @@ pub struct App {
     pub banner_started: Instant,
     pub about_back_to: Screen,
     pub about_notice: Option<String>,
+    /// Kept alive after a copy: on Linux the copied text lives only as long as this handle.
+    pub clipboard: Option<arboard::Clipboard>,
 }
 
 impl App {
@@ -265,6 +267,7 @@ impl App {
             banner_started: Instant::now(),
             about_back_to: Screen::PodcastList,
             about_notice: None,
+            clipboard: None,
         }
     }
 
@@ -292,6 +295,12 @@ impl App {
     /// Quit even mid-download, still asking about unsaved editor changes.
     pub fn request_force_quit(&mut self) {
         self.palette_close();
+        if self.screen == Screen::About
+            && self.about_back_to == Screen::EditPodcast
+            && self.podcast_editor.dirty
+        {
+            self.about_back();
+        }
         if self.screen == Screen::EditPodcast && self.podcast_editor.dirty {
             self.podcast_editor.quit_pending = true;
             self.podcast_editor.show_confirm_discard = true;

@@ -30,9 +30,9 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
   - `state.rs` — `App` struct, `Screen` enum, core state, navigation, episode/download handling
   - `commands.rs` — command palette types (`CommandEntry`, `COMMANDS`), filtering, and navigation
   - `keymap.rs` — every key binding: `Key`, `Action`, `Binding`, `KeyContext`, `context_bindings`, `resolve_global` / `resolve_context`, `hints`
- - `config_screen.rs` — config menu screen logic, directory editing, folder operations
- - `about.rs` — about screen state: version and build info, issue tracker link, clipboard copy
- - `podcast_editor.rs` — edit-podcast screen logic (field navigation, save/discard, delete)
+  - `config_screen.rs` — config menu screen logic, directory editing, folder operations
+  - `about.rs` — about screen state: version and build info, issue tracker link, clipboard copy
+  - `podcast_editor.rs` — edit-podcast screen logic (field navigation, save/discard, delete)
   - `add_podcast_wizard.rs` — multi-step wizard (`WizardStepKind`, `WIZARD_STEPS`), step navigation
 - `podcast/` — data types and I/O, split by domain:
   - `data.rs` — `Podcast`, `Config`, `DefaultMode`, `EpisodeInfo`, `DownloadEvent` structs
@@ -46,9 +46,9 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
   - `podcast_list.rs` — render podcast list screen
   - `episode_select.rs` — render episode selection with checkboxes
   - `download.rs` — render download progress screen
- - `config.rs` — render config menu and confirmation dialogs
- - `about.rs` — render about screen
- - `edit_podcast.rs` — render podcast editor and podcast selection screens
+  - `config.rs` — render config menu and confirmation dialogs
+  - `about.rs` — render about screen
+  - `edit_podcast.rs` — render podcast editor and podcast selection screens
   - `add_podcast.rs` — render add-podcast wizard
   - `command_palette.rs` — render command palette overlay
 
@@ -70,7 +70,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
 
 **Primary flows:** **PodcastList → EpisodeSelect → Downloading** for downloads. **Config** (from `c` on the podcast list or the palette) reaches **EditPodcastSelect → EditPodcast** and the add-podcast wizard.
 
-**Quitting:** `App::request_quit` is the one path for both `q` and the palette **Quit**: it refuses while `download_in_progress`, opens the save/discard confirmation on **EditPodcast** with unsaved changes (`dirty`), and otherwise sets `should_quit`. `Ctrl+C` calls `request_force_quit`, which skips only the download guard. Nothing breaks out of the loop directly — the loop exits on `should_quit`.
+**Quitting:** `App::request_quit` is the one path for both `q` and the palette **Quit**: it refuses while `download_in_progress`, opens the save/discard confirmation on **EditPodcast** with unsaved changes (`dirty`), returning there first when **About** was opened over that editor, and otherwise sets `should_quit`. `Ctrl+C` calls `request_force_quit`, which skips only the download guard. Nothing breaks out of the loop directly — the loop exits on `should_quit`.
 
 **Keymap — the single source of truth for keys.** Every TUI binding is declared once in `app/keymap.rs`. A `Binding` carries its keys, the hint-bar `display` and `label`, the `Action` each key produces, and its guards; `context_bindings(KeyContext)` lists the bindings a screen-and-mode offers **in hint-bar order**, which is the order the bar collapses left to right. `tui.rs` resolves a `KeyEvent` to an `Action` (`resolve_global`, then `resolve_context`) and applies it in one `match`; `ui/widgets.rs` renders the bar from `keymap::hints`; `commands.rs` points each palette entry at a `Binding`. Rebinding a key is one edit to that binding's `keys`.
 

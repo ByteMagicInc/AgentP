@@ -168,7 +168,7 @@ Deleting is the one confirmation that does not take `Enter`. `Enter` opens a pod
 
 ### Config menu
 
-The menu has nine rows: **Add New Podcast**, **Download Folder**, **Default Mode**, **Banner Style**, **New Podcast Defaults**, **Edit Existing Podcasts**, **Open Config File**, **Open Podcasts Config File**, and **Open Download Folder**.
+The menu has eleven rows: **Add New Podcast**, **Download Folder**, **Default Mode**, **Banner Style**, **New Podcast Defaults**, **Edit Existing Podcasts**, **Open Config File**, **Open Podcasts Config File**, **Open Download Folder**, **About AgentP**, and **Report Issue**.
 
 | Key | Action |
 |---|---|

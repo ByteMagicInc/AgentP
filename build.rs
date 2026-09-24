@@ -1,18 +1,23 @@
 use std::process::Command;
 
-fn main() {
-    println!("cargo:rerun-if-changed=.git/HEAD");
-    println!("cargo:rerun-if-changed=.git/refs/heads");
-    println!("cargo:rerun-if-changed=.git/packed-refs");
-    println!("cargo:rerun-if-changed=build.rs");
-    let sha = Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
+fn git(args: &[&str]) -> Option<String> {
+    Command::new("git")
+        .args(args)
         .output()
         .ok()
         .filter(|out| out.status.success())
         .and_then(|out| String::from_utf8(out.stdout).ok())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "unknown".to_string());
+}
+
+fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+    for path in ["HEAD", "refs/heads", "packed-refs"] {
+        if let Some(path) = git(&["rev-parse", "--git-path", path]) {
+            println!("cargo:rerun-if-changed={path}");
+        }
+    }
+    let sha = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=AGENTP_GIT_SHA={sha}");
 }

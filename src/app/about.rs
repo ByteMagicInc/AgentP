@@ -53,22 +53,35 @@ impl App {
     }
 
     /// Open the repository in the browser, where it can be starred.
-    pub fn open_repository(&self) {
-        let _ = open::that(REPOSITORY_URL);
+    pub fn open_repository(&mut self) {
+        self.open_in_browser(REPOSITORY_URL);
     }
 
     /// Open the new-issue page for the repository.
-    pub fn open_issue(&self) {
-        let _ = open::that(new_issue_url());
+    pub fn open_issue(&mut self) {
+        self.open_in_browser(&new_issue_url());
+    }
+
+    fn open_in_browser(&mut self, url: &str) {
+        if let Err(e) = open::that(url) {
+            self.about_notice = Some(format!("Could not open browser: {e}"));
+        }
     }
 
     /// Copy the version string to the clipboard and confirm it on screen.
     pub fn copy_version_info(&mut self) {
-        let info = version_info();
-        match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(info)) {
-            Ok(()) => self.about_notice = Some("Copied version info to clipboard".to_string()),
-            Err(e) => self.about_notice = Some(format!("Clipboard unavailable: {e}")),
-        }
+        let result = match self.clipboard.as_mut() {
+            Some(clipboard) => clipboard.set_text(version_info()),
+            None => arboard::Clipboard::new().and_then(|mut clipboard| {
+                clipboard.set_text(version_info())?;
+                self.clipboard = Some(clipboard);
+                Ok(())
+            }),
+        };
+        self.about_notice = Some(match result {
+            Ok(()) => "Copied version info to clipboard".to_string(),
+            Err(e) => format!("Clipboard unavailable: {e}"),
+        });
     }
 }
 
@@ -105,5 +118,18 @@ mod tests {
         assert_eq!(app.screen, Screen::About);
         app.about_back();
         assert_eq!(app.screen, Screen::Config);
+    }
+
+    #[test]
+    fn quitting_from_about_keeps_unsaved_editor_changes() {
+        let mut app = test_app();
+        app.enter_podcast_editor_existing(0);
+        app.podcast_editor.dirty = true;
+        app.enter_about();
+        app.request_quit();
+        assert!(!app.should_quit);
+        assert_eq!(app.screen, Screen::EditPodcast);
+        assert!(app.podcast_editor.show_confirm_discard);
+        assert!(app.podcast_editor.quit_pending);
     }
 }
