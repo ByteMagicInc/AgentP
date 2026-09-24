@@ -1,5 +1,6 @@
 //! TUI rendering: screen dispatcher, theme, shared widgets, and per-screen draw functions.
 
+mod about;
 mod add_podcast;
 mod banner;
 mod command_palette;
@@ -20,6 +21,7 @@ use ratatui::{
 
 use crate::app::{App, Screen};
 
+use about::draw_about;
 use add_podcast::draw_add_podcast;
 use command_palette::draw_command_palette;
 use config::draw_config;
@@ -42,6 +44,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         Screen::EditPodcast => draw_podcast_editor(frame, app),
         Screen::EditPodcastSelect => draw_edit_podcast_select(frame, app),
         Screen::AddPodcast => draw_add_podcast(frame, app),
+        Screen::About => draw_about(frame, app),
     }
 
     if app.pending_open_folder.is_some()

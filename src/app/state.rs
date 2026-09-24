@@ -20,6 +20,7 @@ pub enum Screen {
     EditPodcast,
     EditPodcastSelect,
     AddPodcast,
+    About,
 }
 
 /// Episode list sort direction.
@@ -124,7 +125,7 @@ pub fn apply_list_jump(state: &mut ListState, len: usize, floor: usize, code: Ke
 }
 
 /// Number of items in the config menu.
-pub const CONFIG_MENU_ITEM_COUNT: usize = 9;
+pub const CONFIG_MENU_ITEM_COUNT: usize = 11;
 /// Total number of editable fields in the podcast editor.
 pub const PODCAST_FIELD_COUNT: usize = 14;
 /// Index of the first boolean field in the podcast editor.
@@ -187,6 +188,10 @@ pub struct App {
     pub pending_open_folder: Option<String>,
     pub hint_bar_expanded: bool,
     pub banner_started: Instant,
+    pub about_back_to: Screen,
+    pub about_notice: Option<String>,
+    /// Kept alive after a copy: on Linux the copied text lives only as long as this handle.
+    pub clipboard: Option<arboard::Clipboard>,
 }
 
 impl App {
@@ -260,6 +265,9 @@ impl App {
             pending_open_folder: None,
             hint_bar_expanded: false,
             banner_started: Instant::now(),
+            about_back_to: Screen::PodcastList,
+            about_notice: None,
+            clipboard: None,
         }
     }
 
@@ -287,6 +295,12 @@ impl App {
     /// Quit even mid-download, still asking about unsaved editor changes.
     pub fn request_force_quit(&mut self) {
         self.palette_close();
+        if self.screen == Screen::About
+            && self.about_back_to == Screen::EditPodcast
+            && self.podcast_editor.dirty
+        {
+            self.about_back();
+        }
         if self.screen == Screen::EditPodcast && self.podcast_editor.dirty {
             self.podcast_editor.quit_pending = true;
             self.podcast_editor.show_confirm_discard = true;

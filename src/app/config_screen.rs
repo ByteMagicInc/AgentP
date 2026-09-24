@@ -57,6 +57,8 @@ impl App {
                 let _ = self.config_open_podcasts_file();
             }
             8 => self.open_download_folder(),
+            9 => self.enter_about(),
+            10 => self.open_issue(),
             _ => {}
         }
     }

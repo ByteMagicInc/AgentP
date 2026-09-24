@@ -31,6 +31,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
   - `commands.rs` — command palette types (`CommandEntry`, `COMMANDS`), filtering, and navigation
   - `keymap.rs` — every key binding: `Key`, `Action`, `Binding`, `KeyContext`, `context_bindings`, `resolve_global` / `resolve_context`, `hints`
   - `config_screen.rs` — config menu screen logic, directory editing, folder operations
+  - `about.rs` — about screen state: version and build info, issue tracker link, clipboard copy
   - `podcast_editor.rs` — edit-podcast screen logic (field navigation, save/discard, delete)
   - `add_podcast_wizard.rs` — multi-step wizard (`WizardStepKind`, `WIZARD_STEPS`), step navigation
 - `podcast/` — data types and I/O, split by domain:
@@ -46,6 +47,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
   - `episode_select.rs` — render episode selection with checkboxes
   - `download.rs` — render download progress screen
   - `config.rs` — render config menu and confirmation dialogs
+  - `about.rs` — render about screen
   - `edit_podcast.rs` — render podcast editor and podcast selection screens
   - `add_podcast.rs` — render add-podcast wizard
   - `command_palette.rs` — render command palette overlay
@@ -60,14 +62,15 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
 1. **PodcastList** — podcast list with latest-episode preview; `j/k` or arrows move, `Enter` opens episodes, `r` refresh feeds, `c` config, `e` edit selected podcast, `D` delete prompt (confirm with `y`/`D`, cancel `Esc`; `Enter` is excluded here because it opens a podcast on this screen and deletion is irreversible); `Home`/`g`, `End`/`G`, `PageUp`/`PageDown` jump and page
 2. **EpisodeSelect** — checkboxes per episode, `Space` toggle, `a` all, `s` sort, `o` open podcast folder, `Enter` download (if any selected), `Esc` back
 3. **Downloading** — progress gauge and log; `Esc` returns when finished or on error
-4. **Config** — menu: add podcast, download folder, default mode, banner style, new-podcast defaults, edit podcasts list, open `config.json`, open `podcasts.json`, open download folder; dialog and directory text-edit modes; `Esc` back to podcast list in navigate mode; `r` on download-folder row restores default path
+4. **Config** — menu: add podcast, download folder, default mode, banner style, new-podcast defaults, edit podcasts list, open `config.json`, open `podcasts.json`, open download folder, about, report issue; dialog and directory text-edit modes; `Esc` back to podcast list in navigate mode; `r` on download-folder row restores default path
 5. **EditPodcastSelect** — pick a podcast; `Enter` opens editor, `Esc` to config
 6. **EditPodcast** — field list for one podcast or template; text / bool / usize editing; `s` save, `r` restore field default, `R` reset all on the template, `Esc` discard in navigate mode; `Ctrl+C` exit with discard confirmation when dirty; `Ctrl+V` paste while editing text
 7. **AddPodcast** — multi-step wizard (`WIZARD_STEPS` in `add_podcast_wizard.rs`); first step is Feed URL; pressing Enter on it shows a **mode-select overlay** (`1`/`m` Manual, `2`/`p` Prepopulate from feed); Prepopulate fetches channel metadata and pre-fills Name, Album Name (sanitized), and Artist; `Esc` cancels/returns at each stage; `Ctrl+V` on text steps
+8. **About** — version and build info (version, git SHA, platform, profile) with repository and new-issue links; `i` opens the issue page, `c` copies the version string to the clipboard, `o` opens the repository, `Esc` returns to the previous screen; reachable from the config menu and the palette
 
 **Primary flows:** **PodcastList → EpisodeSelect → Downloading** for downloads. **Config** (from `c` on the podcast list or the palette) reaches **EditPodcastSelect → EditPodcast** and the add-podcast wizard.
 
-**Quitting:** `App::request_quit` is the one path for both `q` and the palette **Quit**: it refuses while `download_in_progress`, opens the save/discard confirmation on **EditPodcast** with unsaved changes (`dirty`), and otherwise sets `should_quit`. `Ctrl+C` calls `request_force_quit`, which skips only the download guard. Nothing breaks out of the loop directly — the loop exits on `should_quit`.
+**Quitting:** `App::request_quit` is the one path for both `q` and the palette **Quit**: it refuses while `download_in_progress`, opens the save/discard confirmation on **EditPodcast** with unsaved changes (`dirty`), returning there first when **About** was opened over that editor, and otherwise sets `should_quit`. `Ctrl+C` calls `request_force_quit`, which skips only the download guard. Nothing breaks out of the loop directly — the loop exits on `should_quit`.
 
 **Keymap — the single source of truth for keys.** Every TUI binding is declared once in `app/keymap.rs`. A `Binding` carries its keys, the hint-bar `display` and `label`, the `Action` each key produces, and its guards; `context_bindings(KeyContext)` lists the bindings a screen-and-mode offers **in hint-bar order**, which is the order the bar collapses left to right. `tui.rs` resolves a `KeyEvent` to an `Action` (`resolve_global`, then `resolve_context`) and applies it in one `match`; `ui/widgets.rs` renders the bar from `keymap::hints`; `commands.rs` points each palette entry at a `Binding`. Rebinding a key is one edit to that binding's `keys`.
 

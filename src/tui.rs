@@ -163,6 +163,15 @@ fn apply_action(app: &mut App, action: Action, channels: &mut Channels) {
         }
         Action::OpenDownloadFolder => app.open_download_folder(),
         Action::OpenPodcastFolder => app.open_podcast_folder(),
+        Action::OpenRepository => app.open_repository(),
+        Action::GoToAbout => {
+            if !app.download_in_progress() {
+                app.enter_about();
+            }
+        }
+        Action::AboutBack => app.about_back(),
+        Action::OpenIssue => app.open_issue(),
+        Action::CopyVersionInfo => app.copy_version_info(),
         Action::MovePodcastUp => {
             if app.screen == Screen::PodcastList {
                 let _ = app.move_podcast_up();
