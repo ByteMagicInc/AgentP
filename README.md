@@ -332,7 +332,7 @@ cd AgentP
 cargo build --release --locked
 ```
 
-CI runs only when a release is tagged, so before opening a pull request run the same checks locally:
+CI runs automatically only when a release is tagged, so before opening a pull request run the same checks locally:
 
 ```sh
 cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --all --locked
