@@ -5,7 +5,7 @@
 <p align="center">Browse feeds, select episodes, and write clean ID3 tags from an interactive TUI—or automate everything with the CLI.</p>
 
 <p align="center">
-  <a href="https://github.com/ByteMagicInc/AgentP/actions/workflows/ci.yml"><img src="https://github.com/ByteMagicInc/AgentP/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/ByteMagicInc/AgentP/actions/workflows/release.yml"><img src="https://github.com/ByteMagicInc/AgentP/actions/workflows/release.yml/badge.svg" alt="Release status"></a>
   <a href="https://crates.io/crates/agent-p"><img src="https://img.shields.io/crates/v/agent-p.svg" alt="Crates.io version"></a>
   <a href="https://github.com/ByteMagicInc/AgentP/releases"><img src="https://img.shields.io/github/downloads/ByteMagicInc/AgentP/total.svg" alt="GitHub downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="GPL v3 license"></a>
