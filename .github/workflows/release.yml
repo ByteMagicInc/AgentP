@@ -18,15 +18,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
   verify:
-    name: Verify tag & run tests
+    name: Verify tag & release notes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
       - name: Check tag matches Cargo.toml
         shell: bash
         run: |
@@ -37,9 +38,6 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match Cargo.toml version $MANIFEST" >&2
             exit 1
           fi
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test --all --locked
       - name: Extract release notes from changelog
         shell: python
         run: |
@@ -65,7 +63,7 @@ jobs:
 
   build-binaries:
     name: Build ${{ matrix.target }}
-    needs: verify
+    needs: [ci, verify]
     strategy:
       fail-fast: false
       matrix:
