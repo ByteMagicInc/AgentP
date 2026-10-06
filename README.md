@@ -5,7 +5,7 @@
 <p align="center">Browse feeds, select episodes, and write clean ID3 tags from an interactive TUI—or automate everything with the CLI.</p>
 
 <p align="center">
-  <a href="https://github.com/ByteMagicInc/AgentP/actions/workflows/ci.yml"><img src="https://github.com/ByteMagicInc/AgentP/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/ByteMagicInc/AgentP/actions/workflows/release.yml"><img src="https://github.com/ByteMagicInc/AgentP/actions/workflows/release.yml/badge.svg" alt="Release status"></a>
   <a href="https://crates.io/crates/agent-p"><img src="https://img.shields.io/crates/v/agent-p.svg" alt="Crates.io version"></a>
   <a href="https://github.com/ByteMagicInc/AgentP/releases"><img src="https://img.shields.io/github/downloads/ByteMagicInc/AgentP/total.svg" alt="GitHub downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="GPL v3 license"></a>
@@ -168,7 +168,7 @@ Deleting is the one confirmation that does not take `Enter`. `Enter` opens a pod
 
 ### Config menu
 
-The menu has nine rows: **Add New Podcast**, **Download Folder**, **Default Mode**, **Banner Style**, **New Podcast Defaults**, **Edit Existing Podcasts**, **Open Config File**, **Open Podcasts Config File**, and **Open Download Folder**.
+The menu has eleven rows: **Add New Podcast**, **Download Folder**, **Default Mode**, **Banner Style**, **New Podcast Defaults**, **Edit Existing Podcasts**, **Open Config File**, **Open Podcasts Config File**, **Open Download Folder**, **About AgentP**, and **Report Issue**.
 
 | Key | Action |
 |---|---|
@@ -332,10 +332,10 @@ cd AgentP
 cargo build --release --locked
 ```
 
-Before opening a pull request, run what CI runs:
+CI runs automatically only when a release is tagged, so before opening a pull request run the same checks locally:
 
 ```sh
-cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test --all
+cargo fmt --all -- --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --all --locked
 ```
 
 ## Contributing

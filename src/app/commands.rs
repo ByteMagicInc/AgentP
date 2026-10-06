@@ -46,6 +46,7 @@ const SCREENS_EXCEPT_PODCAST_LIST: &[Screen] = &[
     Screen::EditPodcast,
     Screen::EditPodcastSelect,
     Screen::AddPodcast,
+    Screen::About,
 ];
 
 /// All available command palette entries.
@@ -96,7 +97,28 @@ pub static COMMANDS: &[CommandEntry] = &[
         description_podcast_list: Some("open selected podcast folder"),
         shortcut: Some(&OPEN_PODCAST_FOLDER),
         action: Action::OpenPodcastFolder,
-        hide_on: &[Screen::AddPodcast, Screen::Config, Screen::EditPodcast],
+        hide_on: &[
+            Screen::AddPodcast,
+            Screen::Config,
+            Screen::EditPodcast,
+            Screen::About,
+        ],
+    },
+    CommandEntry {
+        category: "repo",
+        description: "star repository",
+        description_podcast_list: None,
+        shortcut: None,
+        action: Action::OpenRepository,
+        hide_on: &[],
+    },
+    CommandEntry {
+        category: "repo",
+        description: "open issue",
+        description_podcast_list: None,
+        shortcut: None,
+        action: Action::OpenIssue,
+        hide_on: &[],
     },
     CommandEntry {
         category: "podcast",
@@ -121,6 +143,14 @@ pub static COMMANDS: &[CommandEntry] = &[
         shortcut: Some(&TOGGLE_HINT_BAR),
         action: Action::ToggleHintBar,
         hide_on: &[],
+    },
+    CommandEntry {
+        category: "app",
+        description: "open about screen",
+        description_podcast_list: None,
+        shortcut: None,
+        action: Action::GoToAbout,
+        hide_on: &[Screen::About, Screen::Downloading],
     },
     CommandEntry {
         category: "app",
@@ -247,6 +277,36 @@ mod tests {
         let cmd = command_for(Action::GoToConfig);
         assert!(!palette_command_visible(Screen::Config, cmd));
         assert!(palette_command_visible(Screen::PodcastList, cmd));
+    }
+
+    #[test]
+    fn about_screen_hidden_on_about_and_downloading() {
+        let cmd = command_for(Action::GoToAbout);
+        assert!(!palette_command_visible(Screen::About, cmd));
+        assert!(!palette_command_visible(Screen::Downloading, cmd));
+        assert!(palette_command_visible(Screen::PodcastList, cmd));
+        assert!(palette_command_visible(Screen::Config, cmd));
+    }
+
+    #[test]
+    fn repo_actions_are_two_and_visible_everywhere() {
+        let repository = command_for(Action::OpenRepository);
+        assert_eq!(repository.description, "star repository");
+        let issue = command_for(Action::OpenIssue);
+        assert_eq!(issue.description, "open issue");
+        for screen in [
+            Screen::PodcastList,
+            Screen::EpisodeSelect,
+            Screen::Downloading,
+            Screen::Config,
+            Screen::EditPodcast,
+            Screen::EditPodcastSelect,
+            Screen::AddPodcast,
+            Screen::About,
+        ] {
+            assert!(palette_command_visible(screen, repository), "{screen:?}");
+            assert!(palette_command_visible(screen, issue), "{screen:?}");
+        }
     }
 
     fn command_for(action: Action) -> &'static CommandEntry {

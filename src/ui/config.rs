@@ -51,7 +51,7 @@ pub(super) fn draw_config(frame: &mut Frame, app: &mut App) {
         String::new()
     };
 
-    let menu_labels: [&str; 9] = [
+    let menu_labels: [&str; 11] = [
         "  Add New Podcast         ",
         "  Download Folder         ",
         "  Default Mode:           ",
@@ -61,6 +61,8 @@ pub(super) fn draw_config(frame: &mut Frame, app: &mut App) {
         "  Open Config File        ",
         "  Open Podcasts Config File",
         "  Open Download Folder    ",
+        "  About AgentP            ",
+        "  Report Issue            ",
     ];
 
     let menu_items: Vec<ListItem> = menu_labels
