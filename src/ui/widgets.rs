@@ -71,6 +71,18 @@ pub(super) fn wrap_words(text: &str, max_width: usize) -> Vec<String> {
 /// Truncate `text` to at most `max_width` display columns, appending '…' when shortened.
 /// Returns `text` unchanged when it already fits; returns an empty string when `max_width` is 0.
 pub(super) fn truncate_ellipsis(text: &str, max_width: usize) -> String {
+    if text.bytes().all(|byte| (b' '..=b'~').contains(&byte)) {
+        if text.len() <= max_width {
+            return text.to_string();
+        }
+        if max_width == 0 {
+            return String::new();
+        }
+        let mut truncated = String::with_capacity(max_width.saturating_add(2));
+        truncated.push_str(&text[..max_width - 1]);
+        truncated.push('…');
+        return truncated;
+    }
     if text.width() <= max_width {
         return text.to_string();
     }
@@ -348,6 +360,62 @@ mod tests {
         assert_eq!(truncate_ellipsis("你好", 4), "你好");
         assert_eq!(truncate_ellipsis("👨‍👩‍👧‍👦 family", 3), "👨‍👩‍👧‍👦…");
         assert_eq!(truncate_ellipsis("\r\nabc", 3), "\r\na…");
+    }
+
+    fn original_truncate_ellipsis(text: &str, max_width: usize) -> String {
+        if text.width() <= max_width {
+            return text.to_string();
+        }
+        if max_width == 0 {
+            return String::new();
+        }
+        let mut result = String::new();
+        for ch in text.chars() {
+            result.push(ch);
+            if result.width() > max_width - 1 {
+                result.pop();
+                break;
+            }
+        }
+        result.push('…');
+        result
+    }
+
+    #[test]
+    fn truncation_matches_original_for_ascii_unicode_and_controls() {
+        let printable: String = (b' '..=b'~').map(char::from).collect();
+        let controls: String = (0..=127u8).map(char::from).collect();
+        let corpus = [
+            "",
+            "one short title",
+            &printable,
+            &controls,
+            "你好世界 科学与历史",
+            "👨‍👩‍👧‍👦 family 👩🏽‍💻 technology ❤️ news",
+            "e\u{301}ducation and cafe\u{301}",
+            "🇺🇸🇮🇱🇯🇵 flags",
+            "\r\nabc\tdef\0ghi",
+            "\u{200d}\u{fe0f}\u{301}",
+        ];
+        for text in corpus {
+            for width in (0..=128).chain([usize::MAX]) {
+                assert_eq!(
+                    truncate_ellipsis(text, width),
+                    original_truncate_ellipsis(text, width),
+                    "text {text:?}, width {width}"
+                );
+            }
+        }
+        for byte in 0..=127u8 {
+            let text = format!("prefix{}suffix", char::from(byte));
+            for width in 0..=text.len() + 1 {
+                assert_eq!(
+                    truncate_ellipsis(&text, width),
+                    original_truncate_ellipsis(&text, width),
+                    "byte {byte}, width {width}"
+                );
+            }
+        }
     }
 
     #[test]
