@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-21
+
 ### Added
 
 - About screen with version and build info (git SHA, platform, build profile) and links to the repository and issue tracker; reachable from the config menu and the command palette.
