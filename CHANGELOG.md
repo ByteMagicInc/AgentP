@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- About screen with version and build info (git SHA, platform, build profile) and links to the repository and issue tracker; reachable from the config menu and the command palette.
+- Report issues and star the repository from inside the app: palette entries on every screen, a Report Issue row on the config menu, and issue pages prefilled with build information.
+- Copy the version and build information to the clipboard from the About screen.
+
+### Changed
+
+- Podcast and episode lists render only the rows that fit on screen, cutting redraw cost by about 65% and keeping large feeds light on CPU while idle.
+- CI now runs as part of tagged releases (or on demand) and gates every release build.
+
 ## [0.1.0] - 2026-09-18
 
 Initial public release of AgentP, a podcast downloader with an interactive terminal interface and a scriptable CLI.
