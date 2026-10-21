@@ -1,11 +1,14 @@
 //! Shared UI helpers: styled blocks, status bar, key hints, centered dialogs, date formatting.
 
+use std::borrow::Cow;
+use std::ops::Range;
+
 use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, ListState, Padding, Paragraph},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -20,6 +23,37 @@ pub(super) const DATE_COLUMN_GAP: usize = 2;
 /// Blank columns kept to the right of the date column. Without them a date sits
 /// against the block's edge and reads as if it had been clipped.
 pub(super) const DATE_COLUMN_TRAIL: usize = 1;
+
+/// Normalize a one-line list's global state and return its visible slice and local state.
+/// The list must be top-to-bottom with no scroll padding; area is inside its block.
+pub(super) fn list_window(
+    state: &mut ListState,
+    len: usize,
+    area: Rect,
+) -> (Range<usize>, ListState) {
+    if area.is_empty() {
+        return (0..0, ListState::default());
+    }
+    if len == 0 {
+        state.select(None);
+        return (0..0, ListState::default());
+    }
+    let height = usize::from(area.height);
+    let selected = state.selected().map(|selected| selected.min(len - 1));
+    let mut start = state.offset().min(len - 1);
+    if let Some(selected) = selected {
+        if selected < start {
+            start = selected;
+        } else if selected - start >= height {
+            start = selected + 1 - height;
+        }
+    }
+    state.select(selected);
+    *state.offset_mut() = start;
+    let mut local = ListState::default();
+    local.select(selected.map(|selected| selected - start));
+    (start..start.saturating_add(height).min(len), local)
+}
 
 pub(super) fn styled_block(title: &str) -> Block<'_> {
     Block::default()
@@ -70,12 +104,24 @@ pub(super) fn wrap_words(text: &str, max_width: usize) -> Vec<String> {
 
 /// Truncate `text` to at most `max_width` display columns, appending '…' when shortened.
 /// Returns `text` unchanged when it already fits; returns an empty string when `max_width` is 0.
-pub(super) fn truncate_ellipsis(text: &str, max_width: usize) -> String {
+pub(super) fn truncate_ellipsis(text: &str, max_width: usize) -> Cow<'_, str> {
+    if text.bytes().all(|byte| (b' '..=b'~').contains(&byte)) {
+        if text.len() <= max_width {
+            return Cow::Borrowed(text);
+        }
+        if max_width == 0 {
+            return Cow::Borrowed("");
+        }
+        let mut truncated = String::with_capacity(max_width.saturating_add(2));
+        truncated.push_str(&text[..max_width - 1]);
+        truncated.push('…');
+        return Cow::Owned(truncated);
+    }
     if text.width() <= max_width {
-        return text.to_string();
+        return Cow::Borrowed(text);
     }
     if max_width == 0 {
-        return String::new();
+        return Cow::Borrowed("");
     }
 
     let content_width = max_width - 1;
@@ -88,7 +134,7 @@ pub(super) fn truncate_ellipsis(text: &str, max_width: usize) -> String {
         }
     }
     s.push('…');
-    s
+    Cow::Owned(s)
 }
 
 pub(super) fn key_hint(key: &str, label: &str) -> Vec<Span<'static>> {
@@ -277,7 +323,89 @@ pub(super) fn date_column(date: &str, used: usize, text_width: usize) -> String 
 
 #[cfg(test)]
 mod tests {
+    use ratatui::{
+        buffer::Buffer,
+        widgets::{HighlightSpacing, List, ListItem, StatefulWidget},
+    };
+
     use super::*;
+
+    fn test_list(visible: Range<usize>) -> List<'static> {
+        let items = visible.map(|index| {
+            let title = ["plain", "你好 👩🏽‍💻", "line\nbreak", "", "e\u{301} 🇮🇱"][index % 5];
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{index}: {title}"), Style::default().fg(PINK)),
+                Span::styled(" tail", Style::default().fg(TEXT_DIM).italic()),
+            ]))
+        });
+        List::new(items)
+            .block(styled_block("Rows"))
+            .highlight_symbol("  > ")
+            .highlight_spacing(HighlightSpacing::Always)
+            .highlight_style(Style::default().bg(SELECTED_BG).bold())
+    }
+
+    #[test]
+    fn visible_rows_match_full_ratatui_buffers_and_states() {
+        for len in [0, 1, 2, 5, 17, 80] {
+            for offset in [0, 1, 4, 16, 79, usize::MAX] {
+                for selected in [
+                    None,
+                    Some(0),
+                    Some(1),
+                    Some(4),
+                    Some(16),
+                    Some(79),
+                    Some(usize::MAX),
+                ] {
+                    for width in [0, 1, 3, 8, 40] {
+                        for height in [0, 1, 2, 3, 5, 12] {
+                            let area = Rect::new(2, 3, width, height);
+                            let mut expected_state = ListState::default();
+                            expected_state.select(selected);
+                            *expected_state.offset_mut() = offset;
+                            let mut actual_state = expected_state;
+                            let (visible, mut local_state) = list_window(
+                                &mut actual_state,
+                                len,
+                                styled_block("Rows").inner(area),
+                            );
+                            let mut expected = Buffer::empty(area);
+                            let mut actual = Buffer::empty(area);
+                            test_list(0..len).render(area, &mut expected, &mut expected_state);
+                            test_list(visible).render(area, &mut actual, &mut local_state);
+                            assert_eq!(
+                                actual, expected,
+                                "len {len}, offset {offset}, selected {selected:?}, area {area:?}"
+                            );
+                            assert_eq!(actual_state, expected_state);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn windowed_rows_preserve_state_across_navigation_and_resize() {
+        let mut expected_state = ListState::default();
+        let mut actual_state = ListState::default();
+        for step in 0..160 {
+            let len = [80, 3, 0, 17][step / 40];
+            let selected = [None, Some(step % 83), Some(usize::MAX), Some(0)][step % 4];
+            expected_state.select(selected);
+            actual_state.select(selected);
+            let area = Rect::new(1, 2, [0, 3, 40][step % 3], [0, 1, 5, 15][step % 4]);
+            let (visible, mut local_state) =
+                list_window(&mut actual_state, len, styled_block("Rows").inner(area));
+            let mut expected = Buffer::empty(area);
+            let mut actual = Buffer::empty(area);
+            test_list(0..len).render(area, &mut expected, &mut expected_state);
+            test_list(visible).render(area, &mut actual, &mut local_state);
+            assert_eq!(actual, expected, "step {step}");
+            assert_eq!(actual_state, expected_state, "step {step}");
+        }
+    }
 
     fn hint(label: &'static str) -> Vec<Span<'static>> {
         vec![Span::raw(label)]
@@ -348,6 +476,62 @@ mod tests {
         assert_eq!(truncate_ellipsis("你好", 4), "你好");
         assert_eq!(truncate_ellipsis("👨‍👩‍👧‍👦 family", 3), "👨‍👩‍👧‍👦…");
         assert_eq!(truncate_ellipsis("\r\nabc", 3), "\r\na…");
+    }
+
+    fn original_truncate_ellipsis(text: &str, max_width: usize) -> String {
+        if text.width() <= max_width {
+            return text.to_string();
+        }
+        if max_width == 0 {
+            return String::new();
+        }
+        let mut result = String::new();
+        for ch in text.chars() {
+            result.push(ch);
+            if result.width() > max_width - 1 {
+                result.pop();
+                break;
+            }
+        }
+        result.push('…');
+        result
+    }
+
+    #[test]
+    fn truncation_matches_original_for_ascii_unicode_and_controls() {
+        let printable: String = (b' '..=b'~').map(char::from).collect();
+        let controls: String = (0..=127u8).map(char::from).collect();
+        let corpus = [
+            "",
+            "one short title",
+            &printable,
+            &controls,
+            "你好世界 科学与历史",
+            "👨‍👩‍👧‍👦 family 👩🏽‍💻 technology ❤️ news",
+            "e\u{301}ducation and cafe\u{301}",
+            "🇺🇸🇮🇱🇯🇵 flags",
+            "\r\nabc\tdef\0ghi",
+            "\u{200d}\u{fe0f}\u{301}",
+        ];
+        for text in corpus {
+            for width in (0..=128).chain([usize::MAX]) {
+                assert_eq!(
+                    truncate_ellipsis(text, width),
+                    original_truncate_ellipsis(text, width),
+                    "text {text:?}, width {width}"
+                );
+            }
+        }
+        for byte in 0..=127u8 {
+            let text = format!("prefix{}suffix", char::from(byte));
+            for width in 0..=text.len() + 1 {
+                assert_eq!(
+                    truncate_ellipsis(&text, width),
+                    original_truncate_ellipsis(&text, width),
+                    "byte {byte}, width {width}"
+                );
+            }
+        }
     }
 
     #[test]

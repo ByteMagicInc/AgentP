@@ -1,5 +1,7 @@
 //! Renders the podcast list screen with latest-episode previews.
 
+use std::borrow::Cow;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Margin},
@@ -25,8 +27,8 @@ const INDEX_PADDING: usize = 3;
 const HIGHLIGHT_SYMBOL: &str = "  > ";
 
 /// The three text spans of one podcast row.
-struct PodcastRow {
-    name: String,
+struct PodcastRow<'a> {
+    name: Cow<'a, str>,
     latest: String,
     date: String,
 }
@@ -38,7 +40,12 @@ struct PodcastRow {
 /// `row_width` is the width available after the index prefix. The date column is
 /// dropped entirely when it would leave less than `MIN_TEXT_WIDTH` for the name,
 /// and the latest-episode title is dropped rather than truncated to a stub.
-fn podcast_row(name: &str, latest_title: &str, date: &str, row_width: usize) -> PodcastRow {
+fn podcast_row<'a>(
+    name: &'a str,
+    latest_title: &str,
+    date: &str,
+    row_width: usize,
+) -> PodcastRow<'a> {
     let reserved = date_column_text_width(row_width, MIN_TEXT_WIDTH);
     let text_width = reserved.unwrap_or(row_width);
 
@@ -120,11 +127,18 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
         .saturating_sub(HIGHLIGHT_SYMBOL.width())
         .saturating_sub(index_width + INDEX_PADDING);
 
+    let (visible, mut window_state) = list_window(
+        &mut app.podcast_list_state,
+        app.config.podcasts.len(),
+        styled_block("Podcasts").inner(chunks[2]),
+    );
     let items: Vec<ListItem> = app
         .config
         .podcasts
         .iter()
         .enumerate()
+        .skip(visible.start)
+        .take(visible.len())
         .map(|(i, podcast)| {
             let (latest_title, latest_date) = app
                 .latest_episodes
@@ -132,12 +146,12 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
                 .and_then(|e| e.as_ref())
                 .map(|(title, date)| {
                     let date_str = format_date(date.as_deref());
-                    (title.clone(), date_str)
+                    (title.as_str(), date_str)
                 })
                 .unwrap_or_default();
 
             let prefix = format!(" {:>width$}  ", i + 1, width = index_width);
-            let row = podcast_row(&podcast.name, &latest_title, &latest_date, available);
+            let row = podcast_row(&podcast.name, latest_title, &latest_date, available);
 
             ListItem::new(Line::from(vec![
                 Span::styled(prefix, Style::default().fg(ORANGE)),
@@ -154,7 +168,7 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
         })
         .collect();
 
-    let item_count = items.len();
+    let item_count = app.config.podcasts.len();
     let list = List::new(items)
         .block(styled_block("Podcasts"))
         .highlight_style(
@@ -166,7 +180,7 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
         .highlight_symbol(HIGHLIGHT_SYMBOL)
         .highlight_spacing(HighlightSpacing::Always);
 
-    frame.render_stateful_widget(list, chunks[2], &mut app.podcast_list_state);
+    frame.render_stateful_widget(list, chunks[2], &mut window_state);
 
     let scrollbar =
         Scrollbar::new(ScrollbarOrientation::VerticalRight).style(Style::default().fg(BORDER));
@@ -216,7 +230,7 @@ mod tests {
 
     use super::*;
 
-    fn total_width(row: &PodcastRow) -> usize {
+    fn total_width(row: &PodcastRow<'_>) -> usize {
         row.name.width() + row.latest.width() + row.date.width()
     }
 
