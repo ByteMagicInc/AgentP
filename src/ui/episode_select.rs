@@ -113,11 +113,19 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
         let text_width = inner_width
             .saturating_sub(HIGHLIGHT_SYMBOL.width())
             .saturating_sub(CHECKBOX_WIDTH);
+        let visible = visible_list_range(
+            &app.episode_list_state,
+            app.episodes.len(),
+            styled_block("Episodes").inner(chunks[1]),
+        );
         let items: Vec<ListItem> = app
             .episodes
             .iter()
             .enumerate()
             .map(|(i, ep)| {
+                if !visible.contains(&i) {
+                    return ListItem::new(Line::default());
+                }
                 let selected = app.episode_selected[i];
                 let checkbox = if selected { " [x] " } else { " [ ] " };
                 let check_style = if selected {

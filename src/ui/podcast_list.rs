@@ -120,12 +120,20 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
         .saturating_sub(HIGHLIGHT_SYMBOL.width())
         .saturating_sub(index_width + INDEX_PADDING);
 
+    let visible = visible_list_range(
+        &app.podcast_list_state,
+        app.config.podcasts.len(),
+        styled_block("Podcasts").inner(chunks[2]),
+    );
     let items: Vec<ListItem> = app
         .config
         .podcasts
         .iter()
         .enumerate()
         .map(|(i, podcast)| {
+            if !visible.contains(&i) {
+                return ListItem::new(Line::default());
+            }
             let (latest_title, latest_date) = app
                 .latest_episodes
                 .get(i)

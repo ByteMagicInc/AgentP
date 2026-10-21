@@ -1,11 +1,13 @@
 //! Shared UI helpers: styled blocks, status bar, key hints, centered dialogs, date formatting.
 
+use std::ops::Range;
+
 use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, ListState, Padding, Paragraph},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -20,6 +22,23 @@ pub(super) const DATE_COLUMN_GAP: usize = 2;
 /// Blank columns kept to the right of the date column. Without them a date sits
 /// against the block's edge and reads as if it had been clipped.
 pub(super) const DATE_COLUMN_TRAIL: usize = 1;
+
+/// Visible indices for a top-to-bottom list of one-line items with no scroll padding.
+pub(super) fn visible_list_range(state: &ListState, len: usize, area: Rect) -> Range<usize> {
+    if len == 0 || area.is_empty() {
+        return 0..0;
+    }
+    let height = usize::from(area.height);
+    let mut start = state.offset().min(len - 1);
+    if let Some(selected) = state.selected().map(|selected| selected.min(len - 1)) {
+        if selected < start {
+            start = selected;
+        } else if selected - start >= height {
+            start = selected + 1 - height;
+        }
+    }
+    start..start.saturating_add(height).min(len)
+}
 
 pub(super) fn styled_block(title: &str) -> Block<'_> {
     Block::default()
@@ -289,7 +308,71 @@ pub(super) fn date_column(date: &str, used: usize, text_width: usize) -> String 
 
 #[cfg(test)]
 mod tests {
+    use ratatui::{
+        buffer::Buffer,
+        widgets::{HighlightSpacing, List, ListItem, StatefulWidget},
+    };
+
     use super::*;
+
+    fn test_list(len: usize, visible: Range<usize>) -> List<'static> {
+        let items = (0..len).map(|index| {
+            if !visible.contains(&index) {
+                return ListItem::new(Line::default());
+            }
+            let title = ["plain", "你好 👩🏽‍💻", "line\nbreak", "", "e\u{301} 🇮🇱"][index % 5];
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{index}: {title}"), Style::default().fg(PINK)),
+                Span::styled(" tail", Style::default().fg(TEXT_DIM).italic()),
+            ]))
+        });
+        List::new(items)
+            .block(styled_block("Rows"))
+            .highlight_symbol("  > ")
+            .highlight_spacing(HighlightSpacing::Always)
+            .highlight_style(Style::default().bg(SELECTED_BG).bold())
+    }
+
+    #[test]
+    fn visible_rows_match_full_ratatui_buffers_and_states() {
+        for len in [0, 1, 2, 5, 17, 80] {
+            for offset in [0, 1, 4, 16, 79, usize::MAX] {
+                for selected in [
+                    None,
+                    Some(0),
+                    Some(1),
+                    Some(4),
+                    Some(16),
+                    Some(79),
+                    Some(usize::MAX),
+                ] {
+                    for width in [0, 1, 3, 8, 40] {
+                        for height in [0, 1, 2, 3, 5, 12] {
+                            let area = Rect::new(2, 3, width, height);
+                            let mut expected_state = ListState::default();
+                            expected_state.select(selected);
+                            *expected_state.offset_mut() = offset;
+                            let mut actual_state = expected_state;
+                            let visible = visible_list_range(
+                                &actual_state,
+                                len,
+                                styled_block("Rows").inner(area),
+                            );
+                            let mut expected = Buffer::empty(area);
+                            let mut actual = Buffer::empty(area);
+                            test_list(len, 0..len).render(area, &mut expected, &mut expected_state);
+                            test_list(len, visible).render(area, &mut actual, &mut actual_state);
+                            assert_eq!(
+                                actual, expected,
+                                "len {len}, offset {offset}, selected {selected:?}, area {area:?}"
+                            );
+                            assert_eq!(actual_state, expected_state);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     fn hint(label: &'static str) -> Vec<Span<'static>> {
         vec![Span::raw(label)]
