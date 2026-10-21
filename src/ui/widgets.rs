@@ -1,5 +1,6 @@
 //! Shared UI helpers: styled blocks, status bar, key hints, centered dialogs, date formatting.
 
+use std::borrow::Cow;
 use std::ops::Range;
 
 use ratatui::{
@@ -89,24 +90,24 @@ pub(super) fn wrap_words(text: &str, max_width: usize) -> Vec<String> {
 
 /// Truncate `text` to at most `max_width` display columns, appending '…' when shortened.
 /// Returns `text` unchanged when it already fits; returns an empty string when `max_width` is 0.
-pub(super) fn truncate_ellipsis(text: &str, max_width: usize) -> String {
+pub(super) fn truncate_ellipsis(text: &str, max_width: usize) -> Cow<'_, str> {
     if text.bytes().all(|byte| (b' '..=b'~').contains(&byte)) {
         if text.len() <= max_width {
-            return text.to_string();
+            return Cow::Borrowed(text);
         }
         if max_width == 0 {
-            return String::new();
+            return Cow::Borrowed("");
         }
         let mut truncated = String::with_capacity(max_width.saturating_add(2));
         truncated.push_str(&text[..max_width - 1]);
         truncated.push('…');
-        return truncated;
+        return Cow::Owned(truncated);
     }
     if text.width() <= max_width {
-        return text.to_string();
+        return Cow::Borrowed(text);
     }
     if max_width == 0 {
-        return String::new();
+        return Cow::Borrowed("");
     }
 
     let content_width = max_width - 1;
@@ -119,7 +120,7 @@ pub(super) fn truncate_ellipsis(text: &str, max_width: usize) -> String {
         }
     }
     s.push('…');
-    s
+    Cow::Owned(s)
 }
 
 pub(super) fn key_hint(key: &str, label: &str) -> Vec<Span<'static>> {

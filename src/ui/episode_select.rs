@@ -1,5 +1,7 @@
 //! Renders the episode selection screen with checkboxes and sorting.
 
+use std::borrow::Cow;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Margin},
@@ -22,8 +24,8 @@ const CHECKBOX_WIDTH: usize = 5;
 const HIGHLIGHT_SYMBOL: &str = "  > ";
 
 /// The two text spans of one episode row.
-struct EpisodeRow {
-    title: String,
+struct EpisodeRow<'a> {
+    title: Cow<'a, str>,
     date: String,
 }
 
@@ -33,7 +35,7 @@ struct EpisodeRow {
 /// `text_width` is the width available after the checkbox. Unlike the podcast
 /// list the title is the row's only text, so when the row is too narrow to keep
 /// both it is the date column that goes, for every row at once.
-fn episode_row(title: &str, date: &str, text_width: usize) -> EpisodeRow {
+fn episode_row<'a>(title: &'a str, date: &str, text_width: usize) -> EpisodeRow<'a> {
     let reserved = date_column_text_width(text_width, MIN_TITLE_WIDTH);
     let title_width = reserved.unwrap_or(text_width);
 
@@ -143,7 +145,7 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
                 let row = episode_row(&ep.title, &format_date(ep.pub_date.as_deref()), text_width);
 
                 ListItem::new(Line::from(vec![
-                    Span::styled(checkbox.to_string(), check_style),
+                    Span::styled(checkbox, check_style),
                     Span::styled(row.title, title_style),
                     Span::styled(
                         row.date,
@@ -213,7 +215,7 @@ mod tests {
 
     use super::*;
 
-    fn total_width(row: &EpisodeRow) -> usize {
+    fn total_width(row: &EpisodeRow<'_>) -> usize {
         row.title.width() + row.date.width()
     }
 
