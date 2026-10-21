@@ -127,8 +127,8 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
         .saturating_sub(HIGHLIGHT_SYMBOL.width())
         .saturating_sub(index_width + INDEX_PADDING);
 
-    let visible = visible_list_range(
-        &app.podcast_list_state,
+    let (visible, mut window_state) = list_window(
+        &mut app.podcast_list_state,
         app.config.podcasts.len(),
         styled_block("Podcasts").inner(chunks[2]),
     );
@@ -137,10 +137,9 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
         .podcasts
         .iter()
         .enumerate()
+        .skip(visible.start)
+        .take(visible.len())
         .map(|(i, podcast)| {
-            if !visible.contains(&i) {
-                return ListItem::new(Line::default());
-            }
             let (latest_title, latest_date) = app
                 .latest_episodes
                 .get(i)
@@ -169,7 +168,7 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
         })
         .collect();
 
-    let item_count = items.len();
+    let item_count = app.config.podcasts.len();
     let list = List::new(items)
         .block(styled_block("Podcasts"))
         .highlight_style(
@@ -181,7 +180,7 @@ pub(super) fn draw_podcast_list(frame: &mut Frame, app: &mut App) {
         .highlight_symbol(HIGHLIGHT_SYMBOL)
         .highlight_spacing(HighlightSpacing::Always);
 
-    frame.render_stateful_widget(list, chunks[2], &mut app.podcast_list_state);
+    frame.render_stateful_widget(list, chunks[2], &mut window_state);
 
     let scrollbar =
         Scrollbar::new(ScrollbarOrientation::VerticalRight).style(Style::default().fg(BORDER));

@@ -115,8 +115,8 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
         let text_width = inner_width
             .saturating_sub(HIGHLIGHT_SYMBOL.width())
             .saturating_sub(CHECKBOX_WIDTH);
-        let visible = visible_list_range(
-            &app.episode_list_state,
+        let (visible, mut window_state) = list_window(
+            &mut app.episode_list_state,
             app.episodes.len(),
             styled_block("Episodes").inner(chunks[1]),
         );
@@ -124,10 +124,9 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
             .episodes
             .iter()
             .enumerate()
+            .skip(visible.start)
+            .take(visible.len())
             .map(|(i, ep)| {
-                if !visible.contains(&i) {
-                    return ListItem::new(Line::default());
-                }
                 let selected = app.episode_selected[i];
                 let checkbox = if selected { " [x] " } else { " [ ] " };
                 let check_style = if selected {
@@ -155,7 +154,7 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
             })
             .collect();
 
-        let item_count = items.len();
+        let item_count = app.episodes.len();
         let list = List::new(items)
             .block(styled_block("Episodes"))
             .highlight_style(
@@ -167,7 +166,7 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
             .highlight_symbol(HIGHLIGHT_SYMBOL)
             .highlight_spacing(HighlightSpacing::Always);
 
-        frame.render_stateful_widget(list, chunks[1], &mut app.episode_list_state);
+        frame.render_stateful_widget(list, chunks[1], &mut window_state);
 
         let scrollbar =
             Scrollbar::new(ScrollbarOrientation::VerticalRight).style(Style::default().fg(BORDER));

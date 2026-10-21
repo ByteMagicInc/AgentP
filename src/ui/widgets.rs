@@ -24,21 +24,35 @@ pub(super) const DATE_COLUMN_GAP: usize = 2;
 /// against the block's edge and reads as if it had been clipped.
 pub(super) const DATE_COLUMN_TRAIL: usize = 1;
 
-/// Visible indices for a top-to-bottom list of one-line items with no scroll padding.
-pub(super) fn visible_list_range(state: &ListState, len: usize, area: Rect) -> Range<usize> {
-    if len == 0 || area.is_empty() {
-        return 0..0;
+/// Normalize a one-line list's global state and return its visible slice and local state.
+/// The list must be top-to-bottom with no scroll padding; area is inside its block.
+pub(super) fn list_window(
+    state: &mut ListState,
+    len: usize,
+    area: Rect,
+) -> (Range<usize>, ListState) {
+    if area.is_empty() {
+        return (0..0, ListState::default());
+    }
+    if len == 0 {
+        state.select(None);
+        return (0..0, ListState::default());
     }
     let height = usize::from(area.height);
+    let selected = state.selected().map(|selected| selected.min(len - 1));
     let mut start = state.offset().min(len - 1);
-    if let Some(selected) = state.selected().map(|selected| selected.min(len - 1)) {
+    if let Some(selected) = selected {
         if selected < start {
             start = selected;
         } else if selected - start >= height {
             start = selected + 1 - height;
         }
     }
-    start..start.saturating_add(height).min(len)
+    state.select(selected);
+    *state.offset_mut() = start;
+    let mut local = ListState::default();
+    local.select(selected.map(|selected| selected - start));
+    (start..start.saturating_add(height).min(len), local)
 }
 
 pub(super) fn styled_block(title: &str) -> Block<'_> {
@@ -316,11 +330,8 @@ mod tests {
 
     use super::*;
 
-    fn test_list(len: usize, visible: Range<usize>) -> List<'static> {
-        let items = (0..len).map(|index| {
-            if !visible.contains(&index) {
-                return ListItem::new(Line::default());
-            }
+    fn test_list(visible: Range<usize>) -> List<'static> {
+        let items = visible.map(|index| {
             let title = ["plain", "你好 👩🏽‍💻", "line\nbreak", "", "e\u{301} 🇮🇱"][index % 5];
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{index}: {title}"), Style::default().fg(PINK)),
@@ -354,15 +365,15 @@ mod tests {
                             expected_state.select(selected);
                             *expected_state.offset_mut() = offset;
                             let mut actual_state = expected_state;
-                            let visible = visible_list_range(
-                                &actual_state,
+                            let (visible, mut local_state) = list_window(
+                                &mut actual_state,
                                 len,
                                 styled_block("Rows").inner(area),
                             );
                             let mut expected = Buffer::empty(area);
                             let mut actual = Buffer::empty(area);
-                            test_list(len, 0..len).render(area, &mut expected, &mut expected_state);
-                            test_list(len, visible).render(area, &mut actual, &mut actual_state);
+                            test_list(0..len).render(area, &mut expected, &mut expected_state);
+                            test_list(visible).render(area, &mut actual, &mut local_state);
                             assert_eq!(
                                 actual, expected,
                                 "len {len}, offset {offset}, selected {selected:?}, area {area:?}"
@@ -372,6 +383,27 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn windowed_rows_preserve_state_across_navigation_and_resize() {
+        let mut expected_state = ListState::default();
+        let mut actual_state = ListState::default();
+        for step in 0..160 {
+            let len = [80, 3, 0, 17][step / 40];
+            let selected = [None, Some(step % 83), Some(usize::MAX), Some(0)][step % 4];
+            expected_state.select(selected);
+            actual_state.select(selected);
+            let area = Rect::new(1, 2, [0, 3, 40][step % 3], [0, 1, 5, 15][step % 4]);
+            let (visible, mut local_state) =
+                list_window(&mut actual_state, len, styled_block("Rows").inner(area));
+            let mut expected = Buffer::empty(area);
+            let mut actual = Buffer::empty(area);
+            test_list(0..len).render(area, &mut expected, &mut expected_state);
+            test_list(visible).render(area, &mut actual, &mut local_state);
+            assert_eq!(actual, expected, "step {step}");
+            assert_eq!(actual_state, expected_state, "step {step}");
         }
     }
 
