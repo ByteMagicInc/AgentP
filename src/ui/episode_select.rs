@@ -207,7 +207,7 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
 
 #[cfg(test)]
 mod tests {
-    use ratatui::{Terminal, backend::TestBackend};
+    use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
 
     use crate::app::Screen;
     use crate::podcast::{BannerStyle, Config, DefaultMode, EpisodeInfo, Podcast};
@@ -218,7 +218,7 @@ mod tests {
         row.title.width() + row.date.width()
     }
 
-    fn rendered_rows(width: u16, episodes: &[(&str, &str)]) -> Vec<String> {
+    fn episode_app(episodes: &[(&str, &str)]) -> App {
         let config = Config {
             download_dir_location: String::new(),
             podcasts: vec![Podcast {
@@ -242,12 +242,18 @@ mod tests {
             .collect();
         app.episode_selected = vec![false; episodes.len()];
         app.episode_list_state.select(Some(0));
+        app
+    }
 
-        let mut terminal = Terminal::new(TestBackend::new(width, 40)).expect("test backend");
+    fn draw(app: &mut App, width: u16, height: u16) -> Buffer {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test backend");
         terminal
-            .draw(|frame| draw_episode_select(frame, &mut app))
+            .draw(|frame| draw_episode_select(frame, app))
             .expect("draw");
-        let buffer = terminal.backend().buffer().clone();
+        terminal.backend().buffer().clone()
+    }
+
+    fn buffer_rows(buffer: &Buffer) -> Vec<String> {
         (0..buffer.area.height)
             .map(|y| {
                 (0..buffer.area.width)
@@ -255,6 +261,11 @@ mod tests {
                     .collect::<String>()
             })
             .collect()
+    }
+
+    fn rendered_rows(width: u16, episodes: &[(&str, &str)]) -> Vec<String> {
+        let mut app = episode_app(episodes);
+        buffer_rows(&draw(&mut app, width, 40))
     }
 
     fn date_columns(rows: &[String], date: &str) -> Vec<usize> {
@@ -336,5 +347,52 @@ mod tests {
             ],
         );
         assert!(date_columns(&rows, "Sep 10, 2026").is_empty());
+    }
+
+    #[test]
+    fn a_scrolled_list_shows_the_rows_around_the_selection() {
+        let titles: Vec<String> = (0..100).map(|i| format!("Episode {i:03}")).collect();
+        let episodes: Vec<(&str, &str)> = titles
+            .iter()
+            .map(|title| (title.as_str(), "10 Sep 2026 10:00:00 +0000"))
+            .collect();
+        let mut app = episode_app(&episodes);
+        app.episode_selected[75] = true;
+        app.episode_selected[80] = true;
+        app.episode_list_state.select(Some(80));
+
+        let buffer = draw(&mut app, 100, 30);
+        let rows = buffer_rows(&buffer);
+        let row_of = |title: &str| rows.iter().position(|row| row.contains(title));
+
+        assert_eq!(app.episode_list_state.selected(), Some(80));
+        assert!(app.episode_list_state.offset() > 0);
+        assert_eq!(row_of("Episode 000"), None);
+        assert_eq!(row_of("Episode 081"), None);
+
+        let shown: Vec<usize> = (0..100)
+            .filter(|i| row_of(&format!("Episode {i:03}")).is_some())
+            .collect();
+        assert!(shown.len() > 1);
+        assert_eq!(*shown.last().unwrap(), 80);
+        assert!(
+            shown.windows(2).all(|pair| pair[1] == pair[0] + 1),
+            "visible episodes should be contiguous: {shown:?}"
+        );
+        for &i in &shown {
+            let y = row_of(&format!("Episode {i:03}")).unwrap();
+            let row = &rows[y];
+            let checked = i == 75 || i == 80;
+            assert_eq!(row.contains("[x]"), checked, "checkbox of episode {i}");
+            assert_eq!(row.contains(" [ ] "), !checked, "checkbox of episode {i}");
+            let highlighted = row.contains(HIGHLIGHT_SYMBOL);
+            assert_eq!(highlighted, i == 80, "highlight on episode {i}");
+            let title_x = row.find("Episode").unwrap() as u16;
+            assert_eq!(
+                buffer[(title_x, y as u16)].bg == SELECTED_BG,
+                i == 80,
+                "selected background on episode {i}"
+            );
+        }
     }
 }
