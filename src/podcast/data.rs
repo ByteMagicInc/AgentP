@@ -138,6 +138,9 @@ pub struct Config {
     pub banner_style: BannerStyle,
 }
 
+/// How the lists show an episode's publish date, such as `Sep 10, 2025`.
+pub const DISPLAY_DATE_FORMAT: &str = "%b %d, %Y";
+
 /// Metadata for a single episode parsed from an RSS feed.
 #[derive(Debug, Clone)]
 pub struct EpisodeInfo {
@@ -146,24 +149,6 @@ pub struct EpisodeInfo {
     pub pub_date: Option<String>,
     /// The feed's description of the episode as plain text; empty when it has none.
     pub description: String,
-}
-
-impl EpisodeInfo {
-    /// The publish date as the episode list shows it, such as `Sep 10, 2025`.
-    pub fn display_date(&self) -> String {
-        display_date(self.pub_date.as_deref())
-    }
-}
-
-/// An RSS publish date as the lists show it, such as `Sep 10, 2025`; empty when
-/// the date is missing or not in RFC 2822 form.
-pub fn display_date(raw: Option<&str>) -> String {
-    raw.and_then(|d| {
-        chrono::DateTime::parse_from_rfc2822(d)
-            .ok()
-            .map(|dt| dt.format("%b %d, %Y").to_string())
-    })
-    .unwrap_or_default()
 }
 
 /// Progress events sent from the download task to the UI over mpsc.

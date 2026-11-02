@@ -15,18 +15,42 @@ pub enum EpisodePrompt {
     Jump,
 }
 
+/// Date forms a search term may match. They are joined with spaces, which no
+/// term contains, so a term never spans two of them.
+const SEARCH_DATE_FORMATS: [&str; 6] = [
+    crate::podcast::DISPLAY_DATE_FORMAT,
+    "%m-%d-%Y",
+    "%m/%d/%Y",
+    "%-m-%-d-%Y",
+    "%-m/%-d/%Y",
+    "%Y-%m-%d",
+];
+
+/// The publish date in every form the search accepts: as the list shows it
+/// (`Sep 10, 2025`), month first with dashes or slashes, with or without
+/// leading zeros (`09-10-2025`, `9/10/2025`), and ISO (`2025-09-10`). A date
+/// that does not parse is searched as the feed wrote it.
+fn searchable_date(raw: Option<&str>) -> String {
+    let Some(raw) = raw else {
+        return String::new();
+    };
+    match chrono::DateTime::parse_from_rfc2822(raw) {
+        Ok(date) => SEARCH_DATE_FORMATS
+            .iter()
+            .map(|format| date.format(format).to_string().to_lowercase())
+            .collect::<Vec<_>>()
+            .join(" "),
+        Err(_) => raw.to_lowercase(),
+    }
+}
+
 fn matches_terms(episode: &EpisodeInfo, terms: &[String]) -> bool {
     if terms.is_empty() {
         return true;
     }
     let title = episode.title.to_lowercase();
     let description = episode.description.to_lowercase();
-    let shown = episode.display_date();
-    let date = if shown.is_empty() {
-        episode.pub_date.as_deref().unwrap_or("").to_lowercase()
-    } else {
-        shown.to_lowercase()
-    };
+    let date = searchable_date(episode.pub_date.as_deref());
     terms.iter().all(|term| {
         title.contains(term.as_str())
             || description.contains(term.as_str())
@@ -274,6 +298,28 @@ mod tests {
         let mut app = episodes_app();
         type_query(&mut app, "Sep 10, 2025");
         assert_eq!(app.episode_visible.len(), 3);
+    }
+
+    #[test]
+    fn numeric_dates_match_month_first_and_iso() {
+        let mut app = episodes_app();
+        for query in [
+            "09-10-2025",
+            "09/10/2025",
+            "9-10-2025",
+            "9/10/2025",
+            "2025-09-10",
+        ] {
+            app.episode_query = query.into();
+            app.episode_search_open();
+            app.episode_prompt_edited();
+            assert_eq!(app.episode_visible.len(), 3, "{query}");
+        }
+        for query in ["10/09/2025", "10-09-2025"] {
+            app.episode_query = query.into();
+            app.episode_prompt_edited();
+            assert!(app.episode_visible.is_empty(), "{query}");
+        }
     }
 
     #[test]
