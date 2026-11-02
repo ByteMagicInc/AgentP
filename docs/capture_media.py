@@ -20,8 +20,8 @@ pyte interprets its terminal output and Pillow renders the cells into a framed
 terminal image. Screen assertions reject unexpected states before capture.
 Pauses sample live output to preserve animation, then frames become looping GIFs.
 
-The walkthroughs browse and select episodes, search Syntax's episodes and jump
-to one by number, filter the command palette and visit configuration, and
+The walkthroughs browse and select episodes, search Merge Conflict's episodes
+and jump to one by number, filter the command palette and visit configuration, and
 prepopulate The Pragmatic Engineer from its RSS feed after a URL that is not a
 feed shows why Prepopulate failed. They never download audio or edit the
 user's configuration.
@@ -397,33 +397,33 @@ def browse():
 
 
 def search():
-    """Capture searching Syntax's episodes, keeping the filter, and jumping by number."""
+    """Capture searching Merge Conflict's episodes, keeping the filter, and jumping by number."""
     with Terminal() as t:
-        t.send(b"j" * 21)
-        t.capture(1000, expected=("Syntax",))
+        t.send(b"j")
+        t.capture(1000, expected=("Merge Conflict",))
         t.send(b"\r")
         t.wait_for(
             lambda: "Loading episodes" not in t.text() and "[ ]" in t.text()
         )
-        t.capture(1600, expected=("Syntax", "[ ]", "Search", "Go to #"))
+        t.capture(1600, expected=("Merge Conflict", "[ ]", "Search", "Go to #"))
         t.send(b"/")
         t.capture(900, expected=("Search:",))
-        for ch in b"rust":
+        for ch in b"copilot":
             t.send(bytes([ch]))
-            t.capture(250)
-        t.capture(1800, expected=("Search: rust_", "episodes"))
+            t.capture(200)
+        t.capture(1800, expected=("Search: copilot_", "episodes"))
         t.send(b"\r")
-        t.capture(1000, expected=("Filter:", "rust"))
+        t.capture(1000, expected=("Filter:", "copilot"))
         t.send(b"j ")
         t.capture(1400, expected=("[x]", "Filter:"))
         t.send(b"\x1b")
         t.capture(1200, expected=("[x]",))
-        for ch in b"1000":
+        for ch in b"500":
             t.send(bytes([ch]))
             t.capture(300, expected=("Go to episode #:",))
-        t.capture(1400, expected=("Go to episode #: 1000_",))
+        t.capture(1400, expected=("Go to episode #: 500_",))
         t.send(b"\r")
-        t.capture(1800, expected=("1000",))
+        t.capture(1800, expected=("500",))
         t.send(b"\x0b")
         for ch in b"episode":
             t.send(bytes([ch]))

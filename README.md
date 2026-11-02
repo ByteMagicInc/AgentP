@@ -77,7 +77,7 @@ Podcast selectors accept either a 1-based index or a case-insensitive name. A su
 ### Search episodes and jump to one by number
 
 <p align="center">
-  <img src="docs/assets/search-and-jump.gif" alt="Searching Syntax's episodes for rust, selecting a match, clearing the filter, jumping to episode 1000, and finding both actions in the command palette" width="1572">
+  <img src="docs/assets/search-and-jump.gif" alt="Searching Merge Conflict's episodes for copilot, selecting a match, clearing the filter, jumping to episode 500, and finding both actions in the command palette" width="1572">
 </p>
 
 ### Add a podcast from its RSS feed
