@@ -203,24 +203,30 @@ pub(super) fn draw_add_podcast(frame: &mut Frame, app: &mut App) {
     frame.render_widget(body, chunks[1]);
 
     if app.add_podcast.mode_select {
-        render_mode_select_overlay(frame);
+        render_mode_select_overlay(frame, app.add_podcast.feed_error.as_deref());
     }
 
     let status = Paragraph::new(hint_lines).block(status_bar_block());
     frame.render_widget(status, chunks[2]);
 }
 
-fn render_mode_select_overlay(frame: &mut Frame) {
+fn render_mode_select_overlay(frame: &mut Frame, feed_error: Option<&str>) {
     let area = frame.area();
     let width = (area.width * 60 / 100).max(44).min(area.width);
-    let height = 7u16;
+    let text_width = usize::from(width.saturating_sub(4)).max(1);
+    let error_lines = feed_error
+        .map(|error| wrap_words(&format!("Prepopulate failed: {error}"), text_width))
+        .unwrap_or_default();
+    let error_rows = u16::try_from(error_lines.len()).unwrap_or(u16::MAX);
+    let extra = if error_rows > 0 { error_rows + 1 } else { 0 };
+    let height = (7 + extra).min(area.height);
     let x = area.x + area.width.saturating_sub(width) / 2;
     let y = area.y + area.height.saturating_sub(height) / 2;
     let dialog_area = Rect::new(x, y, width, height);
 
     frame.render_widget(Clear, dialog_area);
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(Span::styled(
             "How would you like to fill in the details?",
             Style::default().fg(TEXT),
@@ -236,6 +242,16 @@ fn render_mode_select_overlay(frame: &mut Frame) {
             Span::styled("  (experimental)", Style::default().fg(TEXT_DIM).italic()),
         ]),
     ];
+
+    if !error_lines.is_empty() {
+        lines.push(Line::from(vec![]));
+        for chunk in error_lines {
+            lines.push(Line::from(Span::styled(
+                chunk,
+                Style::default().fg(ERROR_FG),
+            )));
+        }
+    }
 
     let dialog = Paragraph::new(lines).block(
         Block::default()

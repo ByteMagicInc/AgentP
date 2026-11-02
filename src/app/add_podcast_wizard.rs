@@ -119,6 +119,8 @@ pub struct AddPodcastState {
     pub loading_feed_info: bool,
     /// true while the Manual / Prepopulate choice overlay is shown.
     pub mode_select: bool,
+    /// Why the last Prepopulate fetch failed; shown on the mode-select overlay.
+    pub feed_error: Option<String>,
 }
 
 impl App {
@@ -133,6 +135,7 @@ impl App {
             text_buffer: String::new(),
             loading_feed_info: false,
             mode_select: false,
+            feed_error: None,
         };
         self.screen = Screen::AddPodcast;
     }
@@ -185,6 +188,7 @@ impl App {
     /// User chose "Manual" — close mode-select overlay and advance to step 1.
     pub fn add_podcast_choose_manual(&mut self) {
         self.add_podcast.mode_select = false;
+        self.add_podcast.feed_error = None;
         self.add_podcast.step = 1;
         self.add_podcast_load_buffer();
     }
@@ -192,6 +196,7 @@ impl App {
     /// User pressed Esc on the mode-select overlay — go back to editing the URL.
     pub fn add_podcast_cancel_mode_select(&mut self) {
         self.add_podcast.mode_select = false;
+        self.add_podcast.feed_error = None;
         self.add_podcast.text_buffer = self.add_podcast.podcast.feed_url.clone();
     }
 
@@ -220,8 +225,9 @@ impl App {
     }
 
     /// Called when the feed metadata fetch fails — return to mode-select.
-    pub fn add_podcast_feed_failed(&mut self) {
+    pub fn add_podcast_feed_failed(&mut self, error: String) {
         self.add_podcast_cancel_fetch();
+        self.add_podcast.feed_error = Some(error);
     }
 
     /// Advance to the next wizard step; returns `true` when all steps are complete.
@@ -432,6 +438,19 @@ mod tests {
         assert_eq!(app.add_podcast.podcast.album_name, "The Show");
         assert_eq!(app.add_podcast.podcast.artist, "Host Name");
         assert_eq!(app.add_podcast.text_buffer, "The Show");
+    }
+
+    #[test]
+    fn feed_failed_returns_to_mode_select_with_error_until_dismissed() {
+        let mut app = test_app();
+        app.enter_add_podcast();
+        app.add_podcast.loading_feed_info = true;
+        app.add_podcast_feed_failed("blocked".into());
+        assert!(app.add_podcast.mode_select);
+        assert!(!app.add_podcast.loading_feed_info);
+        assert_eq!(app.add_podcast.feed_error.as_deref(), Some("blocked"));
+        app.add_podcast_cancel_mode_select();
+        assert!(app.add_podcast.feed_error.is_none());
     }
 
     #[test]

@@ -13,8 +13,32 @@ pub struct FeedMetadata {
 }
 
 async fn fetch_channel(url: &str) -> Result<Channel> {
-    let content = super::http::client().get(url).send().await?.bytes().await?;
-    Ok(Channel::read_from(&content[..])?)
+    let response = super::http::client()
+        .get(url)
+        .send()
+        .await
+        .context("could not reach the feed")?;
+
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if content_type.starts_with("text/") && !content_type.contains("xml") {
+        let blocking_domain = response.url().host_str().unwrap_or("unknown");
+        anyhow::bail!(super::http::filter_block_message(blocking_domain, url));
+    }
+
+    let status = response.status();
+    if !status.is_success() {
+        anyhow::bail!("the feed server returned HTTP {status}");
+    }
+    let content = response
+        .bytes()
+        .await
+        .context("failed to read the feed response")?;
+    Channel::read_from(&content[..]).context("the response is not a valid RSS feed")
 }
 
 /// Fetch channel-level metadata (title and author) from an RSS feed URL.

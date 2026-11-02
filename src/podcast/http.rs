@@ -26,6 +26,14 @@ static CLIENT: LazyLock<Client> = LazyLock::new(|| {
         .expect("failed to build reqwest client")
 });
 
+/// Error text for a host that answered with a web page instead of the requested
+/// content, the signature of an internet filter or proxy intercepting the request.
+pub fn filter_block_message(blocking_domain: &str, url: &str) -> String {
+    format!(
+        "{blocking_domain} (internet-filter/proxy) blocked URL {url} - check the filter/proxy settings"
+    )
+}
+
 /// Shared `reqwest` client with the built-in `User-Agent` set as its default.
 pub fn client() -> &'static Client {
     &CLIENT
