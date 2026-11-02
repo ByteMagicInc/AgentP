@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Search the episode list by title, description, or publish date with `/`; every word must match, `Enter` keeps the filter and `Esc` clears it.
+- Jump to an episode by its number with `#` or by typing a digit on the episode list; each row now starts with that number.
+- Both actions are also in the command palette once a podcast's episodes have loaded.
+- When Prepopulate from feed fails, the add-podcast dialog now says why instead of failing silently.
+
+### Changed
+
+- Feed errors now tell apart an unreachable feed, an HTTP error, a response that is not a valid RSS feed, and a content filter or proxy that redirected the request to a block page.
+- With a search active, `a` toggles only the episodes shown, and `Esc` clears the search before leaving the list.
+- Filter and proxy error messages leave out the URL's query string, which can carry access tokens.
+- Long URLs in error messages wrap instead of being cut off.
+- Dependency updates, including tokio 1.54.1 and arboard 3.7.0, and clipboard-win 5.4.3 in place of a release that was yanked.
+
+### Fixed
+
+- The README and contributor docs had episode numbering backwards: number 1 is the feed's last item, usually the oldest episode, and the newest has the highest number.
+
 ## [0.2.0] - 2026-10-21
 
 ### Added
