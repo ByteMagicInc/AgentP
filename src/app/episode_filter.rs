@@ -21,7 +21,12 @@ fn matches_terms(episode: &EpisodeInfo, terms: &[String]) -> bool {
     }
     let title = episode.title.to_lowercase();
     let description = episode.description.to_lowercase();
-    let date = episode.pub_date.as_deref().unwrap_or("").to_lowercase();
+    let shown = episode.display_date();
+    let date = if shown.is_empty() {
+        episode.pub_date.as_deref().unwrap_or("").to_lowercase()
+    } else {
+        shown.to_lowercase()
+    };
     terms.iter().all(|term| {
         title.contains(term.as_str())
             || description.contains(term.as_str())
@@ -132,7 +137,16 @@ impl App {
             return;
         }
         match self.episode_prompt {
-            Some(EpisodePrompt::Search) => self.refresh_episode_visible(),
+            Some(EpisodePrompt::Search) => {
+                if self.episode_query.contains(char::is_control) {
+                    self.episode_query = self
+                        .episode_query
+                        .chars()
+                        .map(|c| if c.is_control() { ' ' } else { c })
+                        .collect();
+                }
+                self.refresh_episode_visible();
+            }
             Some(EpisodePrompt::Jump) => {
                 self.episode_jump_buffer.retain(|c| c.is_ascii_digit());
                 self.episode_jump_error = None;
@@ -149,15 +163,12 @@ impl App {
             self.episode_jump_cancel();
             return;
         }
-        let Ok(number) = typed.parse::<usize>() else {
-            self.episode_jump_error = Some(format!("\"{typed}\" is not an episode number"));
-            return;
-        };
-        let Some(index) = self
-            .episodes
-            .iter()
-            .position(|episode| episode.feed_index == number)
-        else {
+        let index = typed.parse::<usize>().ok().and_then(|number| {
+            self.episodes
+                .iter()
+                .position(|episode| episode.feed_index == number)
+        });
+        let Some(index) = index else {
             let newest = self
                 .episodes
                 .iter()
@@ -165,7 +176,7 @@ impl App {
                 .max()
                 .unwrap_or(0);
             self.episode_jump_error = Some(format!(
-                "No episode #{number} in this feed (it has #1 to #{newest})"
+                "No episode #{typed} in this feed (it has #1 to #{newest})"
             ));
             return;
         };
@@ -256,6 +267,55 @@ mod tests {
         app.episode_prompt_edited();
         assert!(app.episode_visible.is_empty());
         assert_eq!(app.episode_list_state.selected(), None);
+    }
+
+    #[test]
+    fn the_date_matches_as_the_list_shows_it() {
+        let mut app = episodes_app();
+        type_query(&mut app, "Sep 10, 2025");
+        assert_eq!(app.episode_visible.len(), 3);
+    }
+
+    #[test]
+    fn the_time_and_time_zone_are_not_searched() {
+        let mut app = episodes_app();
+        for query in ["06", "00", "+0000", "wed"] {
+            app.episode_query = query.into();
+            app.episode_search_open();
+            app.episode_prompt_edited();
+            assert!(app.episode_visible.is_empty(), "{query}");
+        }
+    }
+
+    #[test]
+    fn an_unparsable_date_is_searched_as_written() {
+        let mut app = test_app();
+        app.screen = Screen::EpisodeSelect;
+        app.set_episodes(vec![EpisodeInfo {
+            pub_date: Some("Spring 2019".to_string()),
+            ..episode("Old one", 1, "")
+        }]);
+        type_query(&mut app, "spring");
+        assert_eq!(app.episode_visible.len(), 1);
+    }
+
+    #[test]
+    fn pasted_line_breaks_become_spaces() {
+        let mut app = episodes_app();
+        type_query(&mut app, "rust\nproduction\r\n");
+        assert_eq!(app.episode_query, "rust production  ");
+        assert_eq!(visible_titles(&app), vec!["Rust in production"]);
+    }
+
+    #[test]
+    fn a_number_too_large_for_the_feed_says_it_is_missing() {
+        let mut app = episodes_app();
+        app.episode_jump_open(Some('9'));
+        app.episode_jump_buffer.push_str(&"9".repeat(30));
+        app.episode_jump_commit();
+        let error = app.episode_jump_error.as_deref().unwrap();
+        assert!(error.starts_with("No episode #999"), "{error}");
+        assert!(error.ends_with("#1 to #3)"), "{error}");
     }
 
     #[test]

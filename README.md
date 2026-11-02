@@ -157,7 +157,7 @@ Deleting is the one confirmation that does not take `Enter`. `Enter` opens a pod
 
 Every row starts with its episode number, the same numbering `--episodes` uses: numbers count up from the feed's last item, so in a feed that lists newest first, `1` is the oldest episode and the highest number is the newest.
 
-**Search.** Press `/` and type; the list narrows as you type. Several words must all match, in any order, somewhere in the title, description, or publish date, ignoring case. `Enter` keeps the filter and returns to the list; `Esc` clears it. Selections are kept while the list is narrowed, and `Download` fetches every selected episode, including any the search is currently hiding.
+**Search.** Press `/` and type; the list narrows as you type. Several words must all match, in any order, somewhere in the title, description, or publish date as the list shows it (such as `Sep 10, 2025`), ignoring case. `Enter` keeps the filter and returns to the list; `Esc` clears it. Selections are kept while the list is narrowed, and `Download` fetches every selected episode, including any the search is currently hiding.
 
 **Go to a number.** Type a number such as `128` (or press `#` first) and press `Enter`. If a search is hiding that episode, the search is cleared. A number the feed does not have leaves the prompt open with a message.
 

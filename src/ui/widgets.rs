@@ -295,12 +295,7 @@ pub(super) fn render_centered_dialog(frame: &mut Frame, content: Line, border_co
 }
 
 pub(super) fn format_date(raw: Option<&str>) -> String {
-    raw.and_then(|d| {
-        chrono::DateTime::parse_from_rfc2822(d)
-            .ok()
-            .map(|dt| dt.format("%b %d, %Y").to_string())
-    })
-    .unwrap_or_default()
+    crate::podcast::display_date(raw)
 }
 
 /// Columns left for a row's text once a right-aligned date column is reserved,

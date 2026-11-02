@@ -148,6 +148,24 @@ pub struct EpisodeInfo {
     pub description: String,
 }
 
+impl EpisodeInfo {
+    /// The publish date as the episode list shows it, such as `Sep 10, 2025`.
+    pub fn display_date(&self) -> String {
+        display_date(self.pub_date.as_deref())
+    }
+}
+
+/// An RSS publish date as the lists show it, such as `Sep 10, 2025`; empty when
+/// the date is missing or not in RFC 2822 form.
+pub fn display_date(raw: Option<&str>) -> String {
+    raw.and_then(|d| {
+        chrono::DateTime::parse_from_rfc2822(d)
+            .ok()
+            .map(|dt| dt.format("%b %d, %Y").to_string())
+    })
+    .unwrap_or_default()
+}
+
 /// Progress events sent from the download task to the UI over mpsc.
 #[derive(Debug, Clone)]
 pub enum DownloadEvent {
