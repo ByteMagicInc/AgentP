@@ -242,7 +242,7 @@ agentp download --podcast 1 --episodes 3,7,12
 agentp download --podcast 1 --all
 ```
 
-`--episodes`, `--latest`, `--oldest`, and `--all` are mutually exclusive and exactly one is required. Episode index `1` is always the newest episode; `agentp podcast episodes` prints the indices.
+`--episodes`, `--latest`, `--oldest`, and `--all` are mutually exclusive and exactly one is required. Indices follow the feed's item order: index `1` is the feed's last item and the highest index is its first. Most feeds list newest first, which makes `1` the oldest episode. `--latest` and `--oldest` take items from the top and bottom of the feed, and `agentp podcast episodes` prints the indices.
 
 ### Configuration and folders
 
@@ -313,14 +313,14 @@ Without `overwrite_file_name`, the filename is the last path segment of the epis
 When `overwrite_tags` is on, AgentP writes the title, album, and artist plus album-artist frames that you have enabled and leaves every other frame alone. Turn on `remove_existing_tags` to discard the source file's tag first, which helps when a host embeds large metadata blocks that confuse players.
 
 > [!NOTE]
-> Episode indices are **1-based with 1 = newest**. This applies to `--episodes`, `--latest`, `--oldest`, and numeric title prefixes. With `leading_zeros_amount: 3`, episode 1 becomes `0001`, episode 10 becomes `0010`, and episode 100 becomes `0100`.
+> Episode indices are **1-based, counted up from the feed's last item**, so in a feed that lists newest first, 1 is the oldest episode and the newest has the highest index. AgentP does not re-sort by publication date. This applies to `--episodes` and numeric title prefixes. With `leading_zeros_amount: 3`, episode 1 becomes `0001`, episode 10 becomes `0010`, and episode 100 becomes `0100`.
 
 ## Troubleshooting
 
 - **`... (internet-filter/proxy) blocked URL ...`** while downloading — the host answered with an HTML or text page instead of audio. This usually means a proxy or content filter intercepted the request, or the host rejected AgentP's `User-Agent`. Check the filter, or set `user_agent` on that podcast (`agentp podcast edit --podcast N --user-agent "..."`).
 - **`... (internet-filter/proxy) blocked URL ...`** when adding a podcast or loading its episodes — the feed request was redirected to another host that answered with a web page instead of RSS, the signature of a content filter. Ask for the feed's host to be allowed; `user_agent` applies only to audio downloads and does not change feed requests.
 - **A feed adds fine but every download fails** — some hosts (Buzzsprout's CDN, for example) refuse anonymous clients. AgentP sends `AgentP/<version>` by default; a browser-style `user_agent` on the podcast usually resolves it.
-- **`Episode index N is out of range`** — indices count from the newest episode. Run `agentp podcast episodes --podcast N` to see the current numbering.
+- **`Episode index N is out of range`** — indices count up from the feed's last item, usually its oldest episode. Run `agentp podcast episodes --podcast N` to see the current numbering.
 - **Start over** — delete `config.json` and `podcasts.json` from the directory printed by `agentp config path`. The next launch recreates both, including the demo podcasts.
 
 ## Building from source
