@@ -14,6 +14,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::add_podcast_wizard::{WIZARD_STEPS, WizardStepKind};
+use super::episode_filter::EpisodePrompt;
 use super::state::{
     App, ConfigDialog, ConfigEditMode, PODCAST_FIELD_BOOL_START, PODCAST_FIELD_USIZE,
     PodcastEditorTarget, Screen,
@@ -145,6 +146,12 @@ pub enum Action {
     ToggleEpisode,
     ToggleAllEpisodes,
     ToggleSortOrder,
+    SearchEpisodes,
+    JumpToEpisode,
+    EpisodeSearchDone,
+    EpisodeSearchCancel,
+    EpisodeJumpDone,
+    EpisodeJumpCancel,
     StartDownload,
     GoBack,
 
@@ -259,7 +266,17 @@ impl Binding {
     }
 
     /// How the palette spells the keys of this binding that run `action`.
+    ///
+    /// A binding whose keys all run `action` and that sets `display` uses that
+    /// text, which can name keys `tui.rs` handles outside the keymap — the
+    /// digits of `#/0-9`.
     pub fn shortcut_for(&self, action: Action) -> Option<String> {
+        if let Some(display) = self.display
+            && !self.keys.is_empty()
+            && self.keys.iter().all(|(_, bound)| *bound == action)
+        {
+            return Some(display.to_string());
+        }
         let text = self
             .keys
             .iter()
@@ -308,6 +325,8 @@ pub enum KeyContext {
     PodcastDeleteConfirm,
     EpisodeSelectLoading,
     EpisodeSelect,
+    EpisodeSearch,
+    EpisodeJump,
     Downloading,
     CreateFolderConfirm,
     ConfigMenu,
@@ -335,6 +354,8 @@ pub const ALL_CONTEXTS: &[KeyContext] = &[
     KeyContext::PodcastDeleteConfirm,
     KeyContext::EpisodeSelectLoading,
     KeyContext::EpisodeSelect,
+    KeyContext::EpisodeSearch,
+    KeyContext::EpisodeJump,
     KeyContext::Downloading,
     KeyContext::CreateFolderConfirm,
     KeyContext::ConfigMenu,
@@ -358,7 +379,11 @@ impl KeyContext {
     pub fn is_text_input(self) -> bool {
         matches!(
             self,
-            KeyContext::ConfigDirEdit | KeyContext::EditorTextEdit | KeyContext::WizardText
+            KeyContext::ConfigDirEdit
+                | KeyContext::EditorTextEdit
+                | KeyContext::WizardText
+                | KeyContext::EpisodeSearch
+                | KeyContext::EpisodeJump
         )
     }
 }
@@ -398,6 +423,14 @@ fn wizard_past_first_step(app: &App) -> bool {
 
 fn sort_order_label(app: &App) -> &'static str {
     app.sort_order.label()
+}
+
+fn episodes_back_label(app: &App) -> &'static str {
+    if app.episode_filter_active() {
+        "Clear filter"
+    } else {
+        "Back"
+    }
 }
 
 fn wizard_next_label(app: &App) -> &'static str {
@@ -452,6 +485,14 @@ static PASTE: Binding = Binding {
     keys: &[(Key::ctrl(KeyCode::Char('v')), Action::Paste)],
     enabled: None,
     hint_when: None,
+};
+
+static TYPE_TO_SEARCH: Binding = Binding {
+    display: Some("Type"),
+    label: Some(HintLabel::Static("Search")),
+    keys: &[],
+    enabled: None,
+    hint_when: Some(always),
 };
 
 static TYPE_TO_EDIT: Binding = Binding {
@@ -590,6 +631,76 @@ static TOGGLE_SORT_ORDER: Binding = Binding {
     hint_when: None,
 };
 
+pub static SEARCH_EPISODES: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Search")),
+    keys: &[(Key::ch('/'), Action::SearchEpisodes)],
+    enabled: None,
+    hint_when: None,
+};
+
+/// Typing a digit opens the prompt too, but the digit is the prompt's first
+/// character, which an `Action` cannot carry; `tui.rs` seeds it before key
+/// resolution, as it does for the list-jump keys.
+pub static GO_TO_EPISODE: Binding = Binding {
+    display: Some("#/0-9"),
+    label: Some(HintLabel::Static("Go to #")),
+    keys: &[(Key::ch('#'), Action::JumpToEpisode)],
+    enabled: None,
+    hint_when: None,
+};
+
+static SEARCH_NAVIGATE: Binding = Binding {
+    display: Some("↑/↓"),
+    label: Some(HintLabel::Static("Navigate")),
+    keys: &[
+        (Key::plain(KeyCode::Up), Action::EpisodeUp),
+        (Key::plain(KeyCode::Down), Action::EpisodeDown),
+    ],
+    enabled: None,
+    hint_when: None,
+};
+
+static SEARCH_DONE: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Keep filter")),
+    keys: &[(Key::plain(KeyCode::Enter), Action::EpisodeSearchDone)],
+    enabled: None,
+    hint_when: None,
+};
+
+static SEARCH_CANCEL: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Clear")),
+    keys: &[(Key::plain(KeyCode::Esc), Action::EpisodeSearchCancel)],
+    enabled: None,
+    hint_when: None,
+};
+
+static JUMP_TYPE: Binding = Binding {
+    display: Some("0-9"),
+    label: Some(HintLabel::Static("Episode number")),
+    keys: &[],
+    enabled: None,
+    hint_when: Some(always),
+};
+
+static JUMP_DONE: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Go")),
+    keys: &[(Key::plain(KeyCode::Enter), Action::EpisodeJumpDone)],
+    enabled: None,
+    hint_when: None,
+};
+
+static JUMP_CANCEL: Binding = Binding {
+    display: None,
+    label: Some(HintLabel::Static("Cancel")),
+    keys: &[(Key::plain(KeyCode::Esc), Action::EpisodeJumpCancel)],
+    enabled: None,
+    hint_when: None,
+};
+
 static START_DOWNLOAD: Binding = Binding {
     display: None,
     label: Some(HintLabel::Static("Download")),
@@ -600,7 +711,7 @@ static START_DOWNLOAD: Binding = Binding {
 
 static EPISODES_BACK: Binding = Binding {
     display: None,
-    label: Some(HintLabel::Static("Back")),
+    label: Some(HintLabel::Dynamic(episodes_back_label)),
     keys: &[(Key::plain(KeyCode::Esc), Action::GoBack)],
     enabled: None,
     hint_when: None,
@@ -1004,12 +1115,24 @@ static EPISODE_SELECT_BINDINGS: &[&Binding] = &[
     &TOGGLE_EPISODE,
     &TOGGLE_ALL_EPISODES,
     &TOGGLE_SORT_ORDER,
+    &SEARCH_EPISODES,
     &START_DOWNLOAD,
     &COMMAND_PALETTE,
     &EPISODES_BACK,
     &QUIT,
+    &GO_TO_EPISODE,
     &OPEN_PODCAST_FOLDER,
 ];
+
+static EPISODE_SEARCH_BINDINGS: &[&Binding] = &[
+    &TYPE_TO_SEARCH,
+    &SEARCH_NAVIGATE,
+    &PASTE,
+    &SEARCH_DONE,
+    &SEARCH_CANCEL,
+];
+
+static EPISODE_JUMP_BINDINGS: &[&Binding] = &[&JUMP_TYPE, &PASTE, &JUMP_DONE, &JUMP_CANCEL];
 
 static DOWNLOADING_BINDINGS: &[&Binding] = &[&DOWNLOAD_BACK];
 
@@ -1138,6 +1261,8 @@ pub fn context_bindings(context: KeyContext) -> &'static [&'static Binding] {
         KeyContext::PodcastDeleteConfirm => PODCAST_DELETE_CONFIRM_BINDINGS,
         KeyContext::EpisodeSelectLoading => EPISODE_SELECT_LOADING_BINDINGS,
         KeyContext::EpisodeSelect => EPISODE_SELECT_BINDINGS,
+        KeyContext::EpisodeSearch => EPISODE_SEARCH_BINDINGS,
+        KeyContext::EpisodeJump => EPISODE_JUMP_BINDINGS,
         KeyContext::Downloading => DOWNLOADING_BINDINGS,
         KeyContext::CreateFolderConfirm => CREATE_FOLDER_CONFIRM_BINDINGS,
         KeyContext::ConfigMenu => CONFIG_MENU_BINDINGS,
@@ -1236,7 +1361,11 @@ impl App {
                 if self.loading_episodes || self.episode_load_error.is_some() {
                     KeyContext::EpisodeSelectLoading
                 } else {
-                    KeyContext::EpisodeSelect
+                    match self.episode_prompt {
+                        Some(EpisodePrompt::Search) => KeyContext::EpisodeSearch,
+                        Some(EpisodePrompt::Jump) => KeyContext::EpisodeJump,
+                        None => KeyContext::EpisodeSelect,
+                    }
                 }
             }
             Screen::Downloading => KeyContext::Downloading,
@@ -1372,13 +1501,78 @@ mod tests {
                 ("Space", "Toggle"),
                 ("a", "All"),
                 ("s", "Newest first"),
+                ("/", "Search"),
                 ("Enter", "Download"),
                 ("Ctrl+K", "Command Palette"),
                 ("Esc", "Back"),
                 ("q", "Quit"),
+                ("#/0-9", "Go to #"),
                 ("o", "Open folder"),
             ],
         );
+    }
+
+    fn one_episode_app() -> App {
+        let mut app = test_app();
+        app.set_episodes(vec![crate::podcast::EpisodeInfo {
+            title: "Ep".into(),
+            feed_index: 1,
+            pub_date: None,
+            description: String::new(),
+        }]);
+        app.screen = Screen::EpisodeSelect;
+        app
+    }
+
+    #[test]
+    fn episode_prompts_have_their_own_hints_and_take_over_typing() {
+        let mut app = one_episode_app();
+
+        app.episode_search_open();
+        assert_eq!(app.key_context(), KeyContext::EpisodeSearch);
+        assert_hints(
+            &app,
+            &[
+                ("Type", "Search"),
+                ("↑/↓", "Navigate"),
+                ("Ctrl+V", "Paste"),
+                ("Enter", "Keep filter"),
+                ("Esc", "Clear"),
+            ],
+        );
+        for typed in ['q', 'j', ' ', '?', '/', '5'] {
+            assert_eq!(resolve_global(&app, &press(KeyCode::Char(typed))), None);
+            assert_eq!(resolve_context(&app, &press(KeyCode::Char(typed))), None);
+        }
+        assert_eq!(
+            resolve_context(&app, &press(KeyCode::Esc)),
+            Some(Action::EpisodeSearchCancel)
+        );
+        app.episode_search_commit();
+
+        app.episode_jump_open(None);
+        assert_eq!(app.key_context(), KeyContext::EpisodeJump);
+        assert_hints(
+            &app,
+            &[
+                ("0-9", "Episode number"),
+                ("Ctrl+V", "Paste"),
+                ("Enter", "Go"),
+                ("Esc", "Cancel"),
+            ],
+        );
+        assert_eq!(
+            resolve_context(&app, &press(KeyCode::Enter)),
+            Some(Action::EpisodeJumpDone)
+        );
+    }
+
+    #[test]
+    fn the_back_hint_says_clear_filter_while_a_search_is_active() {
+        let mut app = one_episode_app();
+        assert!(shown(&app).contains(&("Esc".to_string(), "Back")));
+        app.episode_query = "ep".into();
+        assert!(shown(&app).contains(&("Esc".to_string(), "Clear filter")));
     }
 
     #[test]
