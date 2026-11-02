@@ -273,6 +273,7 @@ impl App {
                 text_buffer: String::new(),
                 loading_feed_info: false,
                 mode_select: false,
+                feed_error: None,
             },
             pending_open_folder: None,
             hint_bar_expanded: false,

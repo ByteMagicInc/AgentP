@@ -114,8 +114,9 @@ pub async fn download_selected_episodes(
             let blocking_domain = response.url().host_str().unwrap_or("unknown").to_string();
             let _ = tx.send(DownloadEvent::Error {
                 message: format!(
-                    "While downloading Episode {} — {} (internet-filter/proxy) blocked URL {} - check the filter/proxy settings",
-                    feed_index, blocking_domain, url
+                    "While downloading Episode {} — {}",
+                    feed_index,
+                    super::http::filter_block_message(&blocking_domain, url.as_str())
                 ),
             });
             continue;

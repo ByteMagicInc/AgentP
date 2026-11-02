@@ -334,12 +334,15 @@ fn apply_action(app: &mut App, action: Action, channels: &mut Channels) {
         Action::WizardPrepopulate => {
             app.add_podcast.mode_select = false;
             app.add_podcast.loading_feed_info = true;
+            app.add_podcast.feed_error = None;
             let url = app.add_podcast.podcast.feed_url.clone();
 
             let (tx, rx) = mpsc::unbounded_channel();
             channels.feed_info = rx;
             tokio::spawn(async move {
-                let result = fetch_feed_metadata(&url).await.map_err(|e| e.to_string());
+                let result = fetch_feed_metadata(&url)
+                    .await
+                    .map_err(|e| format!("{e:#}"));
                 let _ = tx.send(result);
             });
         }
@@ -439,7 +442,7 @@ pub async fn run(config: podcast::Config, config_notice: Option<String>) -> Resu
                 if app.screen == Screen::AddPodcast && app.add_podcast.loading_feed_info {
                     match feed_result {
                         Ok(feed) => app.add_podcast_feed_loaded(feed.title, feed.author),
-                        Err(_) => app.add_podcast_feed_failed(),
+                        Err(error) => app.add_podcast_feed_failed(error),
                     }
                 }
             }

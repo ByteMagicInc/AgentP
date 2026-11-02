@@ -75,13 +75,22 @@ pub(super) fn status_bar_block() -> Block<'static> {
 
 /// Word-wrap `text` on whitespace into chunks that fit within `max_width` characters.
 /// Width is measured in Unicode scalar values (`chars().count()`), not display columns,
-/// so wide (e.g. CJK) glyphs count as one. Returns at least one chunk (empty if `text` is empty).
+/// so wide (e.g. CJK) glyphs count as one. A word longer than `max_width`, such as a URL,
+/// is broken into `max_width` pieces. Returns at least one chunk (empty if `text` is empty).
 pub(super) fn wrap_words(text: &str, max_width: usize) -> Vec<String> {
     let max_width = max_width.max(1);
     let mut lines: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut current_width = 0usize;
-    for word in text.split_whitespace() {
+    let words = text.split_whitespace().flat_map(|word| {
+        let chars: Vec<char> = word.chars().collect();
+        chars
+            .chunks(max_width)
+            .map(|piece| piece.iter().collect::<String>())
+            .collect::<Vec<_>>()
+    });
+    for word in words {
+        let word = word.as_str();
         let w = word.chars().count();
         if current.is_empty() {
             current.push_str(word);
@@ -343,6 +352,16 @@ mod tests {
             .highlight_symbol("  > ")
             .highlight_spacing(HighlightSpacing::Always)
             .highlight_style(Style::default().bg(SELECTED_BG).bold())
+    }
+
+    #[test]
+    fn wrap_words_breaks_tokens_longer_than_the_width() {
+        let lines = wrap_words("blocked https://feeds.example.com/abc ok", 10);
+        assert!(lines.iter().all(|line| line.chars().count() <= 10));
+        assert_eq!(
+            lines.concat().replace(' ', ""),
+            "blockedhttps://feeds.example.com/abcok"
+        );
     }
 
     #[test]
