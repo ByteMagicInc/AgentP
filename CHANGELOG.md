@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-02
+
 ### Added
 
 - Search the episode list by title, description, or publish date with `/`; every word must match, `Enter` keeps the filter and `Esc` clears it.
