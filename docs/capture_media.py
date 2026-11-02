@@ -1,4 +1,4 @@
-"""Regenerate the README's four screenshots and three GIFs from the real TUI.
+"""Regenerate the README's four screenshots and four GIFs from the real TUI.
 
 This is Linux-only documentation tooling, not part of the AgentP application.
 Run from the repository root with network access for live RSS feeds:
@@ -10,8 +10,9 @@ Run from the repository root with network access for live RSS feeds:
 
 Install DejaVu Sans and Sans Mono, including Bold and Oblique faces, under
 /usr/share/fonts/truetype/dejavu (Debian/Ubuntu: fonts-dejavu-core and
-fonts-dejavu-extra). The script overwrites the seven files in docs/assets;
-inspect them before committing. Episode titles and dates vary with live feeds.
+fonts-dejavu-extra), or point AGENTP_MEDIA_FONTS at a folder holding them.
+The script overwrites the eight files in docs/assets; inspect them before
+committing. Episode titles and dates vary with live feeds.
 
 Each walkthrough starts target/debug/agentp in a pseudo-terminal with a
 disposable HOME seeded from example.podcasts.json. Keystrokes drive the app;
@@ -19,9 +20,11 @@ pyte interprets its terminal output and Pillow renders the cells into a framed
 terminal image. Screen assertions reject unexpected states before capture.
 Pauses sample live output to preserve animation, then frames become looping GIFs.
 
-The walkthroughs browse and select episodes, filter the command palette and
-visit configuration, and prepopulate The Pragmatic Engineer from its RSS feed.
-They never download audio or edit the user's configuration.
+The walkthroughs browse and select episodes, search Syntax's episodes and jump
+to one by number, filter the command palette and visit configuration, and
+prepopulate The Pragmatic Engineer from its RSS feed after a URL that is not a
+feed shows why Prepopulate failed. They never download audio or edit the
+user's configuration.
 """
 
 import codecs
@@ -45,7 +48,7 @@ ASSETS = ROOT / "docs/assets"
 COLS, ROWS = 150, 38
 CELL_W, CELL_H, PAD, OUTER, TITLE_H = 10, 24, 18, 18, 48
 BG, PAGE_BG, TITLE_BG = "#282a36", "#191a21", "#21222c"
-FONTS = Path("/usr/share/fonts/truetype/dejavu")
+FONTS = Path(os.environ.get("AGENTP_MEDIA_FONTS", "/usr/share/fonts/truetype/dejavu"))
 FONT = ImageFont.truetype(str(FONTS / "DejaVuSansMono.ttf"), 17)
 BOLD = ImageFont.truetype(str(FONTS / "DejaVuSansMono-Bold.ttf"), 17)
 ITALIC = ImageFont.truetype(str(FONTS / "DejaVuSansMono-Oblique.ttf"), 17)
@@ -324,7 +327,7 @@ class Terminal:
         for value in expected:
             assert value in text, (value, text)
         assert " more" not in "\n".join(self.screen.display[-4:]), text
-        assert "Loading" not in text, text
+        assert "Loading episodes" not in text, text
         assert "Error:" not in text, text
         frame = self.render()
         if screenshot:
@@ -393,6 +396,44 @@ def browse():
         t.gif("browse-and-select.gif")
 
 
+def search():
+    """Capture searching Syntax's episodes, keeping the filter, and jumping by number."""
+    with Terminal() as t:
+        t.send(b"j" * 21)
+        t.capture(1000, expected=("Syntax",))
+        t.send(b"\r")
+        t.wait_for(
+            lambda: "Loading episodes" not in t.text() and "[ ]" in t.text()
+        )
+        t.capture(1600, expected=("Syntax", "[ ]", "Search", "Go to #"))
+        t.send(b"/")
+        t.capture(900, expected=("Search:",))
+        for ch in b"rust":
+            t.send(bytes([ch]))
+            t.capture(250)
+        t.capture(1800, expected=("Search: rust_", "episodes"))
+        t.send(b"\r")
+        t.capture(1000, expected=("Filter:", "rust"))
+        t.send(b"j ")
+        t.capture(1400, expected=("[x]", "Filter:"))
+        t.send(b"\x1b")
+        t.capture(1200, expected=("[x]",))
+        for ch in b"1000":
+            t.send(bytes([ch]))
+            t.capture(300, expected=("Go to episode #:",))
+        t.capture(1400, expected=("Go to episode #: 1000_",))
+        t.send(b"\r")
+        t.capture(1800, expected=("1000",))
+        t.send(b"\x0b")
+        for ch in b"episode":
+            t.send(bytes([ch]))
+            t.capture(120)
+        t.capture(2200, expected=("search episodes", "go to episode number", "#/0-9"))
+        t.send(b"\x1b")
+        t.capture(900)
+        t.gif("search-and-jump.gif")
+
+
 def palette():
     """Capture folder-action filtering and configuration navigation."""
     with Terminal() as t:
@@ -426,6 +467,17 @@ def add():
         t.capture(1000, expected=("add",))
         t.send(b"\r")
         t.capture(1000, expected=("Feed URL",))
+        not_a_feed = "https://example.com/"
+        t.send(not_a_feed.encode())
+        t.capture(700, expected=(not_a_feed,))
+        t.send(b"\r")
+        t.capture(700, expected=("Manual", "Prepopulate"))
+        t.send(b"p")
+        t.wait_for(lambda: "Prepopulate failed" in t.text())
+        t.capture(2600, expected=("Prepopulate failed", "web page"))
+        t.send(b"\x1b")
+        t.send(b"\x7f" * len(not_a_feed))
+        t.capture(500, expected=("Feed URL",))
         for start in range(0, len(feed), 8):
             t.send(feed[start : start + 8].encode())
             t.capture(150)
@@ -446,5 +498,6 @@ def add():
 
 if __name__ == "__main__":
     browse()
+    search()
     palette()
     add()
