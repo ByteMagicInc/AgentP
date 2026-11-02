@@ -317,7 +317,8 @@ When `overwrite_tags` is on, AgentP writes the title, album, and artist plus alb
 
 ## Troubleshooting
 
-- **`... (internet-filter/proxy) blocked URL ...`** — the host answered with an HTML or text page instead of audio, or, when adding a podcast or loading its episodes, instead of the RSS feed. This usually means a proxy or content filter intercepted the request, or the host rejected AgentP's `User-Agent`. Check the filter, or set `user_agent` on that podcast (`agentp podcast edit --podcast N --user-agent "..."`).
+- **`... (internet-filter/proxy) blocked URL ...`** while downloading — the host answered with an HTML or text page instead of audio. This usually means a proxy or content filter intercepted the request, or the host rejected AgentP's `User-Agent`. Check the filter, or set `user_agent` on that podcast (`agentp podcast edit --podcast N --user-agent "..."`).
+- **`... (internet-filter/proxy) blocked URL ...`** when adding a podcast or loading its episodes — the feed request was redirected to another host that answered with a web page instead of RSS, the signature of a content filter. Ask for the feed's host to be allowed; `user_agent` applies only to audio downloads and does not change feed requests.
 - **A feed adds fine but every download fails** — some hosts (Buzzsprout's CDN, for example) refuse anonymous clients. AgentP sends `AgentP/<version>` by default; a browser-style `user_agent` on the podcast usually resolves it.
 - **`Episode index N is out of range`** — indices count from the newest episode. Run `agentp podcast episodes --podcast N` to see the current numbering.
 - **Start over** — delete `config.json` and `podcasts.json` from the directory printed by `agentp config path`. The next launch recreates both, including the demo podcasts.

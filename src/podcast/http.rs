@@ -28,7 +28,9 @@ static CLIENT: LazyLock<Client> = LazyLock::new(|| {
 
 /// Error text for a host that answered with a web page instead of the requested
 /// content, the signature of an internet filter or proxy intercepting the request.
+/// The URL is shown without its query string or fragment, which can carry access tokens.
 pub fn filter_block_message(blocking_domain: &str, url: &str) -> String {
+    let url = url.split(['?', '#']).next().unwrap_or(url);
     format!(
         "{blocking_domain} (internet-filter/proxy) blocked URL {url} - check the filter/proxy settings"
     )
