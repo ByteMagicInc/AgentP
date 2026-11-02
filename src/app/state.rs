@@ -5,6 +5,7 @@ use std::time::Instant;
 use crossterm::event::KeyCode;
 use ratatui::widgets::ListState;
 
+use super::episode_filter::EpisodePrompt;
 use crate::podcast::{Config, DownloadEvent, EpisodeInfo, Podcast};
 
 use super::add_podcast_wizard::AddPodcastState;
@@ -174,6 +175,12 @@ pub struct App {
     pub episodes: Vec<EpisodeInfo>,
     pub episode_selected: Vec<bool>,
     pub episode_list_state: ListState,
+    /// Indices into `episodes` that the search leaves showing, in list order.
+    pub episode_visible: Vec<usize>,
+    pub episode_query: String,
+    pub episode_prompt: Option<EpisodePrompt>,
+    pub episode_jump_buffer: String,
+    pub episode_jump_error: Option<String>,
     pub loading_episodes: bool,
     pub episode_load_error: Option<String>,
     pub sort_order: SortOrder,
@@ -225,6 +232,11 @@ impl App {
             episodes: Vec::new(),
             episode_selected: Vec::new(),
             episode_list_state: ListState::default(),
+            episode_visible: Vec::new(),
+            episode_query: String::new(),
+            episode_prompt: None,
+            episode_jump_buffer: String::new(),
+            episode_jump_error: None,
             loading_episodes: false,
             episode_load_error: None,
             sort_order: SortOrder::Desc,
@@ -342,6 +354,7 @@ impl App {
         self.episodes.clear();
         self.episode_selected.clear();
         self.episode_list_state = ListState::default();
+        self.reset_episode_view();
         self.loading_episodes = true;
         self.episode_load_error = None;
     }
@@ -351,6 +364,7 @@ impl App {
         let count = episodes.len();
         self.episodes = episodes;
         self.episode_selected = vec![false; count];
+        self.reset_episode_view();
         if count > 0 {
             self.episode_list_state.select(Some(0));
         }
@@ -362,7 +376,8 @@ impl App {
         self.sort_order = self.sort_order.toggle();
         self.episodes.reverse();
         self.episode_selected.reverse();
-        if !self.episodes.is_empty() {
+        self.refresh_episode_visible();
+        if !self.episode_visible.is_empty() {
             self.episode_list_state.select(Some(0));
         }
     }
@@ -385,7 +400,7 @@ impl App {
     /// Move the episode cursor down by one.
     pub fn episode_move_down(&mut self) {
         if let Some(i) = self.episode_list_state.selected()
-            && i < self.episodes.len().saturating_sub(1)
+            && i < self.episode_visible.len().saturating_sub(1)
         {
             self.episode_list_state.select(Some(i + 1));
         }
@@ -393,17 +408,22 @@ impl App {
 
     /// Toggle the download checkbox on the current episode.
     pub fn toggle_current_episode(&mut self) {
-        if let Some(i) = self.episode_list_state.selected()
+        if let Some(i) = self.current_episode_index()
             && i < self.episode_selected.len()
         {
             self.episode_selected[i] = !self.episode_selected[i];
         }
     }
 
-    /// Toggle all episode checkboxes on or off.
+    /// Toggle the checkboxes of every episode the search leaves showing.
     pub fn select_all_episodes(&mut self) {
-        let all_selected = self.episode_selected.iter().all(|&s| s);
-        self.episode_selected.fill(!all_selected);
+        let all_selected = self
+            .episode_visible
+            .iter()
+            .all(|&index| self.episode_selected[index]);
+        for &index in &self.episode_visible {
+            self.episode_selected[index] = !all_selected;
+        }
     }
 
     /// Number of currently selected episodes.
@@ -424,6 +444,7 @@ impl App {
     /// Navigate back from the current screen.
     pub fn go_back(&mut self) {
         match self.screen {
+            Screen::EpisodeSelect if self.episode_filter_active() => self.clear_episode_filter(),
             Screen::EpisodeSelect => self.screen = Screen::PodcastList,
             Screen::Downloading if !self.download_progress.is_active() => {
                 self.screen = Screen::PodcastList;
@@ -615,11 +636,13 @@ mod tests {
                 title: "Ep1".into(),
                 feed_index: 1,
                 pub_date: None,
+                description: String::new(),
             },
             EpisodeInfo {
                 title: "Ep2".into(),
                 feed_index: 2,
                 pub_date: None,
+                description: String::new(),
             },
         ]);
         assert_eq!(app.sort_order, SortOrder::Desc);
@@ -637,11 +660,13 @@ mod tests {
                 title: "Ep1".into(),
                 feed_index: 1,
                 pub_date: None,
+                description: String::new(),
             },
             EpisodeInfo {
                 title: "Ep2".into(),
                 feed_index: 2,
                 pub_date: None,
+                description: String::new(),
             },
         ]);
         app.select_all_episodes();
@@ -658,16 +683,19 @@ mod tests {
                 title: "Ep1".into(),
                 feed_index: 10,
                 pub_date: None,
+                description: String::new(),
             },
             EpisodeInfo {
                 title: "Ep2".into(),
                 feed_index: 20,
                 pub_date: None,
+                description: String::new(),
             },
             EpisodeInfo {
                 title: "Ep3".into(),
                 feed_index: 30,
                 pub_date: None,
+                description: String::new(),
             },
         ]);
         app.episode_selected[0] = true;

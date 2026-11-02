@@ -3,8 +3,8 @@
 use ratatui::widgets::ListState;
 
 use super::keymap::{
-    Action, Binding, CONFIG_BACK, GO_TO_CONFIG, OPEN_PODCAST_FOLDER, QUIT, REFRESH_FEEDS,
-    REORDER_PODCASTS, TOGGLE_HINT_BAR,
+    Action, Binding, CONFIG_BACK, GO_TO_CONFIG, GO_TO_EPISODE, OPEN_PODCAST_FOLDER, QUIT,
+    REFRESH_FEEDS, REORDER_PODCASTS, SEARCH_EPISODES, TOGGLE_HINT_BAR,
 };
 use super::state::{App, Screen};
 
@@ -49,6 +49,16 @@ const SCREENS_EXCEPT_PODCAST_LIST: &[Screen] = &[
     Screen::About,
 ];
 
+const SCREENS_EXCEPT_EPISODE_SELECT: &[Screen] = &[
+    Screen::PodcastList,
+    Screen::Downloading,
+    Screen::Config,
+    Screen::EditPodcast,
+    Screen::EditPodcastSelect,
+    Screen::AddPodcast,
+    Screen::About,
+];
+
 /// All available command palette entries.
 pub static COMMANDS: &[CommandEntry] = &[
     CommandEntry {
@@ -58,6 +68,22 @@ pub static COMMANDS: &[CommandEntry] = &[
         shortcut: Some(&REFRESH_FEEDS),
         action: Action::RefreshFeeds,
         hide_on: &[],
+    },
+    CommandEntry {
+        category: "episodes",
+        description: "search episodes",
+        description_podcast_list: None,
+        shortcut: Some(&SEARCH_EPISODES),
+        action: Action::SearchEpisodes,
+        hide_on: SCREENS_EXCEPT_EPISODE_SELECT,
+    },
+    CommandEntry {
+        category: "episodes",
+        description: "go to episode number",
+        description_podcast_list: None,
+        shortcut: Some(&GO_TO_EPISODE),
+        action: Action::JumpToEpisode,
+        hide_on: SCREENS_EXCEPT_EPISODE_SELECT,
     },
     CommandEntry {
         category: "config",

@@ -14,7 +14,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::App;
+use crate::app::{App, EpisodePrompt};
 
 use super::theme::*;
 use super::widgets::*;
@@ -52,8 +52,10 @@ fn episode_row<'a>(title: &'a str, date: &str, text_width: usize) -> EpisodeRow<
 pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
     let (hint_lines, status_height) = hint_bar(app, frame.area().width);
 
+    let bar = episode_bar(app);
     let chunks = Layout::vertical([
         Constraint::Length(3),
+        Constraint::Length(u16::from(bar.is_some())),
         Constraint::Min(5),
         Constraint::Length(status_height),
     ])
@@ -61,10 +63,17 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
 
     let selected_count = app.selected_count();
     let total_count = app.episodes.len();
-    let counter = if total_count > 0 {
-        format!("  {}/{}", selected_count, total_count)
-    } else {
+    let counter = if total_count == 0 {
         String::new()
+    } else if app.episode_filter_active() {
+        format!(
+            "  {}/{}  ({} shown)",
+            selected_count,
+            total_count,
+            app.episode_visible.len()
+        )
+    } else {
+        format!("  {}/{}", selected_count, total_count)
     };
 
     let title = Paragraph::new(Line::from(vec![
@@ -84,6 +93,10 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
     );
     frame.render_widget(title, chunks[0]);
 
+    if let Some(bar) = bar {
+        frame.render_widget(Paragraph::new(bar), chunks[1]);
+    }
+
     if app.loading_episodes {
         let dots = match (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -102,31 +115,52 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
             Style::default().fg(HIGHLIGHT),
         )]))
         .block(styled_block("Episodes"));
-        frame.render_widget(loading, chunks[1]);
+        frame.render_widget(loading, chunks[2]);
     } else if let Some(err) = &app.episode_load_error.clone() {
         let error = Paragraph::new(Line::from(vec![
             Span::styled("  Error: ", Style::default().fg(ERROR_FG).bold()),
             Span::styled(err.to_string(), Style::default().fg(ERROR_FG)),
         ]))
         .block(styled_block("Episodes"));
-        frame.render_widget(error, chunks[1]);
+        frame.render_widget(error, chunks[2]);
+    } else if app.episode_visible.is_empty() {
+        let message = if app.episode_filter_active() {
+            format!("  No episodes match \"{}\"", app.episode_query.trim())
+        } else {
+            "  No episodes found".to_string()
+        };
+        let empty = Paragraph::new(Line::from(Span::styled(
+            message,
+            Style::default().fg(TEXT_DIM).italic(),
+        )))
+        .block(styled_block("Episodes"));
+        frame.render_widget(empty, chunks[2]);
     } else {
-        let inner_width = styled_block("Episodes").inner(chunks[1]).width as usize;
-        let text_width = inner_width
-            .saturating_sub(HIGHLIGHT_SYMBOL.width())
-            .saturating_sub(CHECKBOX_WIDTH);
-        let (visible, mut window_state) = list_window(
-            &mut app.episode_list_state,
-            app.episodes.len(),
-            styled_block("Episodes").inner(chunks[1]),
-        );
-        let items: Vec<ListItem> = app
+        let number_digits = app
             .episodes
             .iter()
-            .enumerate()
+            .map(|episode| episode.feed_index)
+            .max()
+            .unwrap_or(0)
+            .to_string()
+            .len();
+        let inner_width = styled_block("Episodes").inner(chunks[2]).width as usize;
+        let text_width = inner_width
+            .saturating_sub(HIGHLIGHT_SYMBOL.width())
+            .saturating_sub(CHECKBOX_WIDTH)
+            .saturating_sub(number_digits + 1);
+        let (visible, mut window_state) = list_window(
+            &mut app.episode_list_state,
+            app.episode_visible.len(),
+            styled_block("Episodes").inner(chunks[2]),
+        );
+        let items: Vec<ListItem> = app
+            .episode_visible
+            .iter()
             .skip(visible.start)
             .take(visible.len())
-            .map(|(i, ep)| {
+            .map(|&i| {
+                let ep = &app.episodes[i];
                 let selected = app.episode_selected[i];
                 let checkbox = if selected { " [x] " } else { " [ ] " };
                 let check_style = if selected {
@@ -143,8 +177,11 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
 
                 let row = episode_row(&ep.title, &format_date(ep.pub_date.as_deref()), text_width);
 
+                let number = format!("{:>width$} ", ep.feed_index, width = number_digits);
+
                 ListItem::new(Line::from(vec![
                     Span::styled(checkbox, check_style),
+                    Span::styled(number, Style::default().fg(TEXT_DIM)),
                     Span::styled(row.title, title_style),
                     Span::styled(
                         row.date,
@@ -154,7 +191,7 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
             })
             .collect();
 
-        let item_count = app.episodes.len();
+        let item_count = app.episode_visible.len();
         let list = List::new(items)
             .block(styled_block("Episodes"))
             .highlight_style(
@@ -166,7 +203,7 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
             .highlight_symbol(HIGHLIGHT_SYMBOL)
             .highlight_spacing(HighlightSpacing::Always);
 
-        frame.render_stateful_widget(list, chunks[1], &mut window_state);
+        frame.render_stateful_widget(list, chunks[2], &mut window_state);
 
         let scrollbar =
             Scrollbar::new(ScrollbarOrientation::VerticalRight).style(Style::default().fg(BORDER));
@@ -174,7 +211,7 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
             .position(app.episode_list_state.selected().unwrap_or(0));
         frame.render_stateful_widget(
             scrollbar,
-            chunks[1].inner(Margin {
+            chunks[2].inner(Margin {
                 vertical: 1,
                 horizontal: 0,
             }),
@@ -202,7 +239,62 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
     }
 
     let status = Paragraph::new(hint_lines).block(status_bar_block());
-    frame.render_widget(status, chunks[2]);
+    frame.render_widget(status, chunks[3]);
+}
+
+/// The one-line search or go-to prompt, or a note that a search is narrowing the list.
+fn episode_bar(app: &App) -> Option<Line<'static>> {
+    let total = app.episodes.len();
+    let shown = app.episode_visible.len();
+    let dim = Style::default().fg(TEXT_DIM);
+    match app.episode_prompt {
+        Some(EpisodePrompt::Search) => Some(Line::from(vec![
+            Span::styled(" Search: ", Style::default().fg(ORANGE).bold()),
+            Span::styled(
+                format!("{}_", app.episode_query),
+                Style::default().fg(HIGHLIGHT),
+            ),
+            Span::styled(
+                format!("   {shown} of {total} episodes · title, description, date"),
+                dim,
+            ),
+        ])),
+        Some(EpisodePrompt::Jump) => {
+            let newest = app
+                .episodes
+                .iter()
+                .map(|episode| episode.feed_index)
+                .max()
+                .unwrap_or(0);
+            let mut spans = vec![
+                Span::styled(" Go to episode #: ", Style::default().fg(ORANGE).bold()),
+                Span::styled(
+                    format!("{}_", app.episode_jump_buffer),
+                    Style::default().fg(HIGHLIGHT),
+                ),
+            ];
+            match &app.episode_jump_error {
+                Some(error) => spans.push(Span::styled(
+                    format!("   {error}"),
+                    Style::default().fg(ERROR_FG),
+                )),
+                None => spans.push(Span::styled(
+                    format!("   1 = oldest, {newest} = newest"),
+                    dim,
+                )),
+            }
+            Some(Line::from(spans))
+        }
+        None if app.episode_filter_active() => Some(Line::from(vec![
+            Span::styled(" Filter: ", Style::default().fg(ORANGE).bold()),
+            Span::styled(
+                app.episode_query.trim().to_string(),
+                Style::default().fg(HIGHLIGHT),
+            ),
+            Span::styled(format!("   {shown} of {total} episodes"), dim),
+        ])),
+        None => None,
+    }
 }
 
 #[cfg(test)]
@@ -238,9 +330,11 @@ mod tests {
                 title: (*title).to_string(),
                 feed_index: i,
                 pub_date: Some((*date).to_string()),
+                description: String::new(),
             })
             .collect();
         app.episode_selected = vec![false; episodes.len()];
+        app.reset_episode_view();
         app.episode_list_state.select(Some(0));
         app
     }
@@ -394,5 +488,82 @@ mod tests {
                 "selected background on episode {i}"
             );
         }
+    }
+
+    fn numbered_app() -> App {
+        let mut app = episode_app(&[
+            ("Alpha", "Wed, 10 Sep 2025 06:00:00 +0000"),
+            ("Beta", "Wed, 10 Sep 2025 06:00:00 +0000"),
+            ("Gamma", "Wed, 10 Sep 2025 06:00:00 +0000"),
+        ]);
+        for (i, episode) in app.episodes.iter_mut().enumerate() {
+            episode.feed_index = i + 1;
+        }
+        app.episodes[1].description = "mentions a Zebra".to_string();
+        app
+    }
+
+    fn screen_text(app: &mut App) -> String {
+        buffer_rows(&draw(app, 90, 14)).join(
+            "
+",
+        )
+    }
+
+    #[test]
+    fn every_row_shows_its_feed_number() {
+        let mut app = numbered_app();
+        let text = screen_text(&mut app);
+        for (number, title) in [(1, "Alpha"), (2, "Beta"), (3, "Gamma")] {
+            let row = text.lines().find(|row| row.contains(title)).unwrap();
+            assert!(
+                row.contains(&format!("{number} {title}")),
+                "row for {title}: {row}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_filtered_list_draws_only_its_matches_with_their_own_checkboxes() {
+        let mut app = numbered_app();
+        app.episode_selected[1] = true;
+        app.episode_search_open();
+        app.episode_query = "zebra".to_string();
+        app.episode_prompt_edited();
+        let text = screen_text(&mut app);
+        assert!(text.contains("Search: zebra_"), "{text}");
+        assert!(text.contains("1 of 3 episodes"), "{text}");
+        assert!(text.contains("1/3  (1 shown)"), "{text}");
+        assert!(!text.contains("Alpha") && !text.contains("Gamma"), "{text}");
+        let row = text.lines().find(|row| row.contains("Beta")).unwrap();
+        assert!(
+            row.contains("[x]"),
+            "selection belongs to the episode: {row}"
+        );
+    }
+
+    #[test]
+    fn a_kept_filter_is_announced_and_an_empty_result_says_so() {
+        let mut app = numbered_app();
+        app.episode_search_open();
+        app.episode_query = "nothing like this".to_string();
+        app.episode_prompt_edited();
+        app.episode_search_commit();
+        let text = screen_text(&mut app);
+        assert!(text.contains("Filter: nothing like this"), "{text}");
+        assert!(text.contains("No episodes match"), "{text}");
+    }
+
+    #[test]
+    fn the_go_to_prompt_explains_the_numbering_and_reports_a_missing_episode() {
+        let mut app = numbered_app();
+        app.episode_jump_open(Some('4'));
+        let text = screen_text(&mut app);
+        assert!(text.contains("Go to episode #: 4_"), "{text}");
+        assert!(text.contains("1 = oldest, 3 = newest"), "{text}");
+
+        app.episode_jump_commit();
+        let text = screen_text(&mut app);
+        assert!(text.contains("No episode #4"), "{text}");
     }
 }

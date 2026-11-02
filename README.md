@@ -141,11 +141,19 @@ Deleting is the one confirmation that does not take `Enter`. `Enter` opens a pod
 |---|---|
 | `j` / `↓`, `k` / `↑` | Move selection |
 | `Space` | Toggle episode |
-| `a` | Toggle all |
+| `a` | Toggle all (only the episodes a search leaves showing) |
 | `s` | Sort (newest/oldest) |
+| `/` | Search episodes by title, description, or date |
+| `#` or any digit | Go to an episode by its number |
 | `o` | Open podcast folder |
 | `Enter` | Download selected |
-| `Esc` | Back |
+| `Esc` | Clear the search, or go back when none is active |
+
+Every row starts with its episode number. Numbers count up from the oldest episode, so `1` is the oldest and the highest number is the newest, the same numbering `--episodes` uses.
+
+**Search.** Press `/` and type; the list narrows as you type. Several words must all match, in any order, somewhere in the title, description, or publish date, ignoring case. `Enter` keeps the filter and returns to the list; `Esc` clears it. Selections are kept while the list is narrowed, and `Download` fetches every selected episode, including any the search is currently hiding.
+
+**Go to a number.** Type a number such as `128` (or press `#` first) and press `Enter`. If a search is hiding that episode, the search is cleared. A number the feed does not have leaves the prompt open with a message.
 
 <details>
 <summary>Keys for the command palette, download screen, config menu, wizard, and editor</summary>

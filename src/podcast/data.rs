@@ -144,6 +144,8 @@ pub struct EpisodeInfo {
     pub title: String,
     pub feed_index: usize,
     pub pub_date: Option<String>,
+    /// The feed's description of the episode as plain text; empty when it has none.
+    pub description: String,
 }
 
 /// Progress events sent from the download task to the UI over mpsc.

@@ -43,6 +43,32 @@ pub async fn get_last_podcast_name(podcast: &Podcast) -> Result<(String, Option<
     Ok((episode_title, pub_date))
 }
 
+/// Reduce a feed's HTML description to searchable plain text: tags dropped,
+/// common entities decoded, whitespace collapsed.
+fn plain_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => {
+                in_tag = true;
+                text.push(' ');
+            }
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    let decoded = text
+        .replace("&nbsp;", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&");
+    decoded.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Fetch the full episode list from an RSS feed URL.
 pub async fn fetch_episode_list(feed_url: &str) -> Result<Vec<EpisodeInfo>> {
     let channel = fetch_channel(feed_url).await?;
@@ -60,13 +86,38 @@ pub async fn fetch_episode_list(feed_url: &str) -> Result<Vec<EpisodeInfo>> {
                 .unwrap_or_else(|| format!("Episode {}", length - rss_idx));
             let feed_index = length - rss_idx;
             let pub_date = item.pub_date.clone();
+            let description = plain_text(
+                item.description()
+                    .filter(|text| !text.trim().is_empty())
+                    .or_else(|| item.itunes_ext().and_then(|ext| ext.summary()))
+                    .or_else(|| item.content())
+                    .unwrap_or(""),
+            );
             EpisodeInfo {
                 title,
                 feed_index,
                 pub_date,
+                description,
             }
         })
         .collect();
 
     Ok(episodes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_text_drops_tags_and_decodes_entities() {
+        assert_eq!(
+            plain_text(
+                "<p>Fish &amp; chips</p><p>with&nbsp;<b>vinegar</b></p>
+"
+            ),
+            "Fish & chips with vinegar"
+        );
+        assert_eq!(plain_text(""), "");
+    }
 }

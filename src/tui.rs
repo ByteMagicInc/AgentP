@@ -80,7 +80,7 @@ fn apply_list_jump(app: &mut App, context: KeyContext, code: KeyCode) -> bool {
             app::apply_list_jump(&mut app.podcast_list_state, podcast_count, 0, code)
         }
         KeyContext::EpisodeSelect | KeyContext::EpisodeSelectLoading => {
-            let episode_count = app.episodes.len();
+            let episode_count = app.episode_visible.len();
             app::apply_list_jump(&mut app.episode_list_state, episode_count, 0, code)
         }
         KeyContext::ConfigMenu => app::apply_list_jump(
@@ -111,6 +111,8 @@ fn text_buffer(app: &mut App, context: KeyContext) -> Option<&mut String> {
         KeyContext::ConfigDirEdit => Some(&mut app.config_editor.text_buffer),
         KeyContext::EditorTextEdit => Some(&mut app.podcast_editor.text_buffer),
         KeyContext::WizardText => Some(&mut app.add_podcast.text_buffer),
+        KeyContext::EpisodeSearch => Some(&mut app.episode_query),
+        KeyContext::EpisodeJump => Some(&mut app.episode_jump_buffer),
         _ => None,
     }
 }
@@ -127,6 +129,7 @@ fn type_into_buffer(app: &mut App, context: KeyContext, code: KeyCode) {
         }
         _ => {}
     }
+    app.episode_prompt_edited();
 }
 
 fn apply_action(app: &mut App, action: Action, channels: &mut Channels) {
@@ -229,6 +232,12 @@ fn apply_action(app: &mut App, action: Action, channels: &mut Channels) {
         Action::ToggleEpisode => app.toggle_current_episode(),
         Action::ToggleAllEpisodes => app.select_all_episodes(),
         Action::ToggleSortOrder => app.toggle_sort_order(),
+        Action::SearchEpisodes => app.episode_search_open(),
+        Action::JumpToEpisode => app.episode_jump_open(None),
+        Action::EpisodeSearchDone => app.episode_search_commit(),
+        Action::EpisodeSearchCancel => app.episode_search_cancel(),
+        Action::EpisodeJumpDone => app.episode_jump_commit(),
+        Action::EpisodeJumpCancel => app.episode_jump_cancel(),
         Action::StartDownload => {
             let indices = app.selected_feed_indices();
             if !indices.is_empty() {
@@ -368,6 +377,7 @@ fn apply_action(app: &mut App, action: Action, channels: &mut Channels) {
                 paste_from_clipboard(&mut pasted);
                 buffer.push_str(&pasted);
             }
+            app.episode_prompt_edited();
         }
     }
 }
@@ -491,6 +501,14 @@ pub async fn run(config: podcast::Config, config_notice: Option<String>) -> Resu
                 }
 
                 let context = app.key_context();
+                if context == KeyContext::EpisodeSelect
+                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && let KeyCode::Char(digit) = key.code
+                    && digit.is_ascii_digit()
+                {
+                    app.episode_jump_open(Some(digit));
+                    continue;
+                }
                 if apply_list_jump(&mut app, context, key.code) {
                     continue;
                 }
