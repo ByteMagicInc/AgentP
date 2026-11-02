@@ -202,13 +202,22 @@ pub fn palette_command_visible(screen: Screen, cmd: &CommandEntry) -> bool {
 }
 
 impl App {
+    /// Whether the palette lists `cmd` now: visible on this screen, and its action
+    /// able to act — search and go-to need a loaded, non-empty episode list.
+    fn palette_command_offered(&self, cmd: &CommandEntry) -> bool {
+        palette_command_visible(self.screen, cmd)
+            && match cmd.action {
+                Action::SearchEpisodes | Action::JumpToEpisode => self.episode_prompt_available(),
+                _ => true,
+            }
+    }
+
     /// Open the command palette and reset its filter.
     pub fn palette_open(&mut self) {
         self.palette.open = true;
         self.palette.query.clear();
-        let screen = self.screen;
         self.palette.matches = (0..COMMANDS.len())
-            .filter(|&i| palette_command_visible(screen, &COMMANDS[i]))
+            .filter(|&i| self.palette_command_offered(&COMMANDS[i]))
             .collect();
         let mut state = ListState::default();
         if !self.palette.matches.is_empty() {
@@ -224,12 +233,11 @@ impl App {
 
     fn palette_filter(&mut self) {
         let q = self.palette.query.to_lowercase();
-        let screen = self.screen;
         self.palette.matches = COMMANDS
             .iter()
             .enumerate()
             .filter(|(_, cmd)| {
-                if !palette_command_visible(screen, cmd) {
+                if !self.palette_command_offered(cmd) {
                     return false;
                 }
                 let mut haystack = format!("{} {}", cmd.category, cmd.description).to_lowercase();
@@ -333,6 +341,43 @@ mod tests {
             assert!(palette_command_visible(screen, repository), "{screen:?}");
             assert!(palette_command_visible(screen, issue), "{screen:?}");
         }
+    }
+
+    #[test]
+    fn episode_commands_are_offered_only_once_episodes_are_loaded() {
+        let offered = |app: &mut App| {
+            app.palette_open();
+            let actions: Vec<Action> = app
+                .palette
+                .matches
+                .iter()
+                .map(|&i| COMMANDS[i].action)
+                .collect();
+            [Action::SearchEpisodes, Action::JumpToEpisode].map(|a| actions.contains(&a))
+        };
+        let mut app = test_app();
+        app.screen = Screen::EpisodeSelect;
+        app.loading_episodes = true;
+        assert_eq!(offered(&mut app), [false, false]);
+
+        app.loading_episodes = false;
+        assert_eq!(offered(&mut app), [false, false]);
+
+        app.episodes.push(crate::podcast::EpisodeInfo {
+            title: "Pilot".to_string(),
+            feed_index: 1,
+            pub_date: None,
+            description: String::new(),
+        });
+        assert_eq!(offered(&mut app), [true, true]);
+    }
+
+    #[test]
+    fn go_to_episode_names_the_digit_keys_in_the_palette() {
+        assert_eq!(
+            GO_TO_EPISODE.shortcut_for(Action::JumpToEpisode).as_deref(),
+            Some("#/0-9")
+        );
     }
 
     fn command_for(action: Action) -> &'static CommandEntry {

@@ -52,7 +52,7 @@ fn episode_row<'a>(title: &'a str, date: &str, text_width: usize) -> EpisodeRow<
 pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
     let (hint_lines, status_height) = hint_bar(app, frame.area().width);
 
-    let bar = episode_bar(app);
+    let bar = episode_bar(app, usize::from(frame.area().width));
     let chunks = Layout::vertical([
         Constraint::Length(3),
         Constraint::Length(u16::from(bar.is_some())),
@@ -242,23 +242,54 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
     frame.render_widget(status, chunks[3]);
 }
 
+/// The tail of `text` that fits in `width` columns, led by '…' when cut, so the
+/// end of a long query, where the user is typing, stays in view.
+fn fit_tail(text: &str, width: usize) -> String {
+    if text.width() <= width {
+        return text.to_string();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let mut kept = Vec::new();
+    let mut used = 1;
+    for c in text.chars().rev() {
+        let w = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+        if used + w > width {
+            break;
+        }
+        used += w;
+        kept.push(c);
+    }
+    std::iter::once('…').chain(kept.into_iter().rev()).collect()
+}
+
 /// The one-line search or go-to prompt, or a note that a search is narrowing the list.
-fn episode_bar(app: &App) -> Option<Line<'static>> {
+///
+/// A query wider than `width` keeps its tail, so the cursor and the match count
+/// never scroll out of view.
+fn episode_bar(app: &App, width: usize) -> Option<Line<'static>> {
     let total = app.episodes.len();
     let shown = app.episode_visible.len();
     let dim = Style::default().fg(TEXT_DIM);
     match app.episode_prompt {
-        Some(EpisodePrompt::Search) => Some(Line::from(vec![
-            Span::styled(" Search: ", Style::default().fg(ORANGE).bold()),
-            Span::styled(
-                format!("{}_", app.episode_query),
-                Style::default().fg(HIGHLIGHT),
-            ),
-            Span::styled(
-                format!("   {shown} of {total} episodes · title, description, date"),
-                dim,
-            ),
-        ])),
+        Some(EpisodePrompt::Search) => {
+            let prefix = " Search: ";
+            let count = format!("   {shown} of {total} episodes");
+            let full = format!("{count} · title, description, date");
+            let room = |suffix: &str| width.saturating_sub(prefix.width() + 1 + suffix.width());
+            let suffix = if app.episode_query.width() <= room(&full) {
+                full
+            } else {
+                count
+            };
+            let query = fit_tail(&app.episode_query, room(&suffix));
+            Some(Line::from(vec![
+                Span::styled(prefix, Style::default().fg(ORANGE).bold()),
+                Span::styled(format!("{query}_"), Style::default().fg(HIGHLIGHT)),
+                Span::styled(suffix, dim),
+            ]))
+        }
         Some(EpisodePrompt::Jump) => {
             let newest = app
                 .episodes
@@ -285,14 +316,19 @@ fn episode_bar(app: &App) -> Option<Line<'static>> {
             }
             Some(Line::from(spans))
         }
-        None if app.episode_filter_active() => Some(Line::from(vec![
-            Span::styled(" Filter: ", Style::default().fg(ORANGE).bold()),
-            Span::styled(
-                app.episode_query.trim().to_string(),
-                Style::default().fg(HIGHLIGHT),
-            ),
-            Span::styled(format!("   {shown} of {total} episodes"), dim),
-        ])),
+        None if app.episode_filter_active() => {
+            let prefix = " Filter: ";
+            let count = format!("   {shown} of {total} episodes");
+            let room = width.saturating_sub(prefix.width() + count.width());
+            Some(Line::from(vec![
+                Span::styled(prefix, Style::default().fg(ORANGE).bold()),
+                Span::styled(
+                    fit_tail(app.episode_query.trim(), room),
+                    Style::default().fg(HIGHLIGHT),
+                ),
+                Span::styled(count, dim),
+            ]))
+        }
         None => None,
     }
 }
@@ -540,6 +576,19 @@ mod tests {
             row.contains("[x]"),
             "selection belongs to the episode: {row}"
         );
+    }
+
+    #[test]
+    fn a_long_query_keeps_its_tail_cursor_and_count_in_view() {
+        let mut app = numbered_app();
+        app.episode_search_open();
+        app.episode_query = format!("{}zebra", "x".repeat(80));
+        app.episode_prompt_edited();
+        let rows = buffer_rows(&draw(&mut app, 50, 14));
+        let bar = rows.iter().find(|row| row.contains("Search:")).unwrap();
+        assert!(bar.contains("…"), "{bar}");
+        assert!(bar.contains("zebra_"), "{bar}");
+        assert!(bar.contains("of 3 episodes"), "{bar}");
     }
 
     #[test]

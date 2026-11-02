@@ -266,7 +266,17 @@ impl Binding {
     }
 
     /// How the palette spells the keys of this binding that run `action`.
+    ///
+    /// A binding whose keys all run `action` and that sets `display` uses that
+    /// text, which can name keys `tui.rs` handles outside the keymap — the
+    /// digits of `#/0-9`.
     pub fn shortcut_for(&self, action: Action) -> Option<String> {
+        if let Some(display) = self.display
+            && !self.keys.is_empty()
+            && self.keys.iter().all(|(_, bound)| *bound == action)
+        {
+            return Some(display.to_string());
+        }
         let text = self
             .keys
             .iter()

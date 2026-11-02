@@ -81,7 +81,8 @@ impl App {
         self.episode_list_state.select(position);
     }
 
-    fn episode_prompt_available(&self) -> bool {
+    /// Whether the episode list is loaded and non-empty, so search and go-to can act.
+    pub(super) fn episode_prompt_available(&self) -> bool {
         self.screen == Screen::EpisodeSelect
             && !self.loading_episodes
             && self.episode_load_error.is_none()
