@@ -1,6 +1,7 @@
 //! RSS feed fetching: latest episode title, full episode list, and channel metadata.
 
 use anyhow::{Context, Result};
+use reqwest::StatusCode;
 use rss::Channel;
 
 use super::data::{EpisodeInfo, Podcast};
@@ -13,8 +14,60 @@ pub struct FeedMetadata {
 }
 
 async fn fetch_channel(url: &str) -> Result<Channel> {
-    let content = super::http::client().get(url).send().await?.bytes().await?;
-    Ok(Channel::read_from(&content[..])?)
+    let response = super::http::client()
+        .get(url)
+        .send()
+        .await
+        .context("could not reach the feed")?;
+
+    let status = response.status();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let host = response.url().host_str().unwrap_or("unknown").to_string();
+    let body = response
+        .bytes()
+        .await
+        .context("failed to read the feed response")?;
+
+    parse_feed_response(url, &host, status, &content_type, &body)
+}
+
+fn parse_feed_response(
+    url: &str,
+    host: &str,
+    status: StatusCode,
+    content_type: &str,
+    body: &[u8],
+) -> Result<Channel> {
+    let is_web_page = content_type.starts_with("text/") && !content_type.contains("xml");
+    let requested_host = reqwest::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_ascii_lowercase));
+    let redirected_away = requested_host.is_some_and(|h| h != host.to_ascii_lowercase());
+    let filter_page = is_web_page && redirected_away;
+    if !status.is_success() {
+        if filter_page {
+            anyhow::bail!(
+                "the feed server returned HTTP {status} and a web page - {}",
+                super::http::filter_block_message(host, url)
+            );
+        }
+        anyhow::bail!("the feed server returned HTTP {status}");
+    }
+    match Channel::read_from(body) {
+        Ok(channel) => Ok(channel),
+        Err(_) if filter_page => {
+            anyhow::bail!(super::http::filter_block_message(host, url))
+        }
+        Err(_) if is_web_page => {
+            anyhow::bail!("the feed URL returned a web page instead of an RSS feed")
+        }
+        Err(error) => Err(error).context("the response is not a valid RSS feed"),
+    }
 }
 
 /// Fetch channel-level metadata (title and author) from an RSS feed URL.
@@ -69,4 +122,93 @@ pub async fn fetch_episode_list(feed_url: &str) -> Result<Vec<EpisodeInfo>> {
         .collect();
 
     Ok(episodes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FEED: &str = r#"<?xml version="1.0"?><rss version="2.0"><channel><title>Show</title><link>https://example.com</link><description>d</description></channel></rss>"#;
+    const PAGE: &str = "<html><body>Blocked by your administrator</body></html>";
+    const URL: &str = "https://feeds.example.com/show";
+
+    fn parse(status: u16, content_type: &str, body: &str) -> Result<Channel> {
+        let status = StatusCode::from_u16(status).unwrap();
+        parse_feed_response(URL, "filter.corp", status, content_type, body.as_bytes())
+    }
+
+    #[test]
+    fn feed_served_as_plain_text_still_parses() {
+        assert_eq!(parse(200, "text/plain", FEED).unwrap().title(), "Show");
+    }
+
+    #[test]
+    fn rss_content_types_parse() {
+        for content_type in ["application/rss+xml", "text/xml", ""] {
+            assert_eq!(parse(200, content_type, FEED).unwrap().title(), "Show");
+        }
+    }
+
+    #[test]
+    fn web_page_instead_of_feed_is_reported_as_filter_block() {
+        let message = parse(200, "text/html; charset=utf-8", PAGE)
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains("(internet-filter/proxy) blocked URL"));
+        assert!(message.contains("filter.corp"));
+        assert!(message.contains(URL));
+    }
+
+    #[test]
+    fn error_status_is_shown_and_flags_a_filter_only_for_web_pages() {
+        let page = parse(403, "text/html", PAGE).unwrap_err().to_string();
+        assert!(page.contains("HTTP 403"));
+        assert!(page.contains("internet-filter/proxy"));
+
+        let plain = parse(404, "application/xml", "").unwrap_err().to_string();
+        assert!(plain.contains("HTTP 404"));
+        assert!(!plain.contains("internet-filter/proxy"));
+    }
+
+    #[test]
+    fn web_page_from_the_feed_host_itself_is_not_blamed_on_a_filter() {
+        let not_found = StatusCode::from_u16(404).unwrap();
+        let missing = parse_feed_response(
+            URL,
+            "feeds.example.com",
+            not_found,
+            "text/html",
+            PAGE.as_bytes(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(missing.contains("HTTP 404"));
+        assert!(!missing.contains("internet-filter/proxy"));
+
+        let ok = StatusCode::from_u16(200).unwrap();
+        let page = parse_feed_response(URL, "FEEDS.example.com", ok, "text/html", PAGE.as_bytes())
+            .unwrap_err()
+            .to_string();
+        assert!(page.contains("web page instead of an RSS feed"));
+        assert!(!page.contains("internet-filter/proxy"));
+    }
+
+    #[test]
+    fn filter_message_drops_query_tokens() {
+        let message = super::super::http::filter_block_message(
+            "filter.corp",
+            "https://feeds.example.com/show?token=secret#frag",
+        );
+        assert!(message.contains("https://feeds.example.com/show"));
+        assert!(!message.contains("secret"));
+    }
+
+    #[test]
+    fn invalid_non_page_body_is_not_blamed_on_a_filter() {
+        let message = parse(200, "application/xml", "not a feed")
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains("not a valid RSS feed"));
+        assert!(!message.contains("internet-filter/proxy"));
+    }
 }
