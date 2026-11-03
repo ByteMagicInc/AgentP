@@ -39,7 +39,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
   - `data.rs` — `Podcast`, `Config`, `DefaultMode`, `EpisodeInfo`, `DownloadEvent` structs
   - `config_files.rs` — `load_config` / `save_config`, path helpers (`config_dir`, `config_path`)
   - `rss_feed.rs` — `fetch_episode_list`, `get_last_podcast_name`, `fetch_feed_metadata` / `FeedMetadata` (async RSS fetching)
-  - `download.rs` — `download_selected_episodes` (async download + ID3 tagging); `sanitize_filename` shared `pub(crate)` helper
+  - `download.rs` — `download_selected_episodes` (async download, then ID3 tags for MP3 or MP4 metadata atoms for AAC/M4A, chosen by sniffing the bytes); `sanitize_filename` shared `pub(crate)` helper
 - `ui/` — rendering, split per screen:
   - `theme.rs` — Dracula color palette
   - `banner.rs` — the podcast-list banner: mascot art, both wordmarks, and `draw_banner`, which left-aligns them in a centered box and animates a one-shot typewriter reveal plus a periodic blink, both pure functions of `App::banner_started.elapsed()`. `banner_style` picks `WORDMARK_JOINED` (box-drawing strokes that meet across cell edges) or `WORDMARK_ASCII`; both place the letters in the same columns.
@@ -93,7 +93,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
 1. `load_config()` reads from `<home>/.config/AgentP/` (via `dirs`); on Windows the same relative path is typically `%USERPROFILE%\.config\AgentP\`. `config.json` holds `download_dir_location`, `default_podcast`, `default_mode`, and `banner_style`; `podcasts.json` holds the podcast list. Missing files are created (demo podcasts from `example.podcasts.json` when appropriate). `example.podcasts.json` in the repo is the template for the podcast list shape.
 2. On TUI startup, `spawn_latest_fetches` runs `get_last_podcast_name` per podcast on `tokio::spawn`; results arrive on an unbounded `mpsc` channel consumed with `try_recv` in the main loop.
 3. Choosing a podcast spawns `fetch_episode_list`; results arrive on a separate unbounded `mpsc` channel as `Ok(episodes)` / `Err`.
-4. `download_selected_episodes()` writes under `<download_dir>/<effective_album_name>/` with optional ID3 tags; `effective_album_name()` falls back to podcast name when album_name is empty. Progress uses `DownloadEvent` on `mpsc`.
+4. `download_selected_episodes()` writes under `<download_dir>/<effective_album_name>/` with optional tags (ID3 or MP4); `effective_album_name()` falls back to podcast name when album_name is empty. Progress uses `DownloadEvent` on `mpsc`.
 5. Config changes from the TUI call synchronous `save_config()` in `config_files.rs`, which rewrites both JSON files.
 
 **Async architecture:** Episode fetch, latest-title fetch, and downloads use `tokio::spawn` and `mpsc`; the TUI main loop drains channels with `try_recv()` each frame. CLI commands call the same async functions directly.
@@ -102,7 +102,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
 
 **Podcast editor/wizard field indices are positional.** The TUI podcast editor (`podcast_editor.rs`) and add-podcast wizard (`add_podcast_wizard.rs`) share one `WIZARD_STEPS` list and address fields by index: identity text fields `0..PODCAST_FIELD_BOOL_START`, bool `PODCAST_FIELD_BOOL_START..PODCAST_FIELD_USIZE`, usize `PODCAST_FIELD_USIZE`, then `user_agent` as the final field — a Text field kept last in the UI (constants in `state.rs`). Because text fields are no longer contiguous, the wizard commits text by `WizardStepKind::Text`, not by an index threshold. `field_text`/`field_bool` in `data.rs` and the editor's `enter_edit_mode`/`commit_edit`/`toggle_bool`/`restore_default` match on the same indices. Inserting or reordering a field means updating all of these together — the catch-all match arms make a wrong index fail silently, so the invariant test in `add_podcast_wizard.rs` guards it.
 
-**Key crates (directly used in `src/`):** `ratatui`, `crossterm`, `tokio`, `reqwest`, `rss`, `id3`, `serde`/`serde_json`, `anyhow`, `dirs`, `chrono`, `open`, `arboard`, `sanitize-filename`, `clap`, `unicode-width`.
+**Key crates (directly used in `src/`):** `ratatui`, `crossterm`, `tokio`, `reqwest`, `rss`, `id3`, `serde`/`serde_json`, `anyhow`, `dirs`, `chrono`, `open`, `arboard`, `sanitize-filename`, `clap`, `unicode-width`, `mp4ameta`.
 
 `main.rs` and helpers use `anyhow::Result`. Async network/file streaming for downloads lives under Tokio in `podcast/download.rs`.
 
@@ -111,6 +111,7 @@ AgentP is a single-binary Rust application for downloading and tagging podcast e
 - **Legacy JSON keys load but are never written.** `example.podcasts.json` and every config `save_config()` writes use the Rust names (`overwrite_*`, `leading_zeros_amount`). The older `override_*`, `leading_zeros_to_title`, `create_new_tags` and `remove_image` spellings survive only as `serde` aliases on `Podcast` in `data.rs`, and a config using them is rewritten canonically on the next save. Dropping an alias silently breaks configs that predate the rename.
 - **`example.podcasts.json` is the canonical shape.** If you add or rename a field on `Podcast`, update it too — it's what seeds new installs. Fields marked `skip_serializing_if` are optional and deliberately absent from it, `user_agent` among them.
 - **Episode index 1 is oldest; the highest index is newest.** `feed_index` is `length - rss_idx` in `rss_feed.rs`, and `download.rs` inverts it, so a feed that publishes newest-first numbers its latest episode as the episode count. `--episodes`, `podcast episodes`, and the ID3 title-number prefix all share this convention; `--latest` and `--oldest` select by feed order rather than by a literal index. Don't flip it in one place.
+- **Feeds are not all MP3.** Some (Latent Space among them) mix in `audio/mp4` `.m4a` episodes. `download.rs` sniffs the container from the first bytes (`ftyp` at offset 4 is MP4) rather than trusting the URL or `Content-Type`, and tags MP4 with `mp4ameta`: an ID3 tag prepended to an MP4 file leaves it unplayable. The `overwrite_file_name` path keeps the URL's extension, falling back to the sniffed container.
 - **`save_config()` rewrites both JSON files** every call — TUI-side edits don't need a separate save for `podcasts.json` vs `config.json`.
 - **TUI redraws are driven by the 50ms `event::poll`**, not a timer. If you add background work that should update the UI, send on an `mpsc` — don't rely on a repaint loop. The banner animation is the one thing that does ride the poll: it reads elapsed time at draw time and needs no task or channel.
 

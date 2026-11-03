@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Episodes a feed serves as AAC audio (`.m4a`, `audio/mp4`) were left unplayable, because tagging wrote an MP3 ID3 tag in front of the MP4 data. They are now tagged with MP4 metadata and stay valid; files from other formats are saved untagged with a notice.
+- With **Rename Files** on, the file keeps the extension of the downloaded audio instead of always ending in `.mp3`.
+
 ## [0.3.0] - 2026-11-02
 
 ### Added

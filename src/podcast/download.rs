@@ -110,6 +110,8 @@ pub async fn download_selected_episodes(
             .unwrap_or("")
             .to_string();
 
+        let final_url = response.url().clone();
+
         if content_type.starts_with("text/") {
             let blocking_domain = response.url().host_str().unwrap_or("unknown").to_string();
             let _ = tx.send(DownloadEvent::Error {
@@ -121,15 +123,6 @@ pub async fn download_selected_episodes(
             });
             continue;
         }
-
-        let file_name = download_file_name(
-            podcast.overwrite_file_name,
-            &episode_title,
-            &url,
-            response.url(),
-        );
-
-        let episode_add = channel_path.join(&file_name);
 
         let content = match response.bytes().await {
             Ok(b) => b,
@@ -143,6 +136,18 @@ pub async fn download_selected_episodes(
                 continue;
             }
         };
+
+        let container = AudioContainer::sniff(&content);
+        let file_name = download_file_name(
+            podcast.overwrite_file_name,
+            &episode_title,
+            &url,
+            &final_url,
+            container,
+        );
+
+        let episode_add = channel_path.join(&file_name);
+
         match File::create(&episode_add) {
             Ok(mut file) => {
                 if let Err(e) = copy(&mut content.as_ref(), &mut file) {
@@ -174,76 +179,151 @@ pub async fn download_selected_episodes(
             continue;
         }
 
-        let mut tag = if podcast.remove_existing_tags && podcast.overwrite_tags {
-            Tag::new()
-        } else {
-            match Tag::read_from_path(&episode_add) {
-                Ok(tag) => tag,
-                Err(Error {
-                    kind: ErrorKind::NoTag,
-                    ..
-                }) => {
-                    if podcast.remove_images && !podcast.overwrite_tags {
-                        continue;
-                    }
-                    Tag::new()
-                }
-                Err(err) => {
-                    let _ = tx.send(DownloadEvent::Error {
-                        message: format!(
-                            "Failed to read tags for episode {} — skipping tagging: {}",
-                            feed_index, err
-                        ),
-                    });
-                    continue;
-                }
+        let title = tag_title(podcast, *feed_index, &episode_title);
+        let tagged = match container {
+            AudioContainer::Mp3 => write_id3_tags(&episode_add, podcast, &title),
+            AudioContainer::Mpeg4 => write_mp4_tags(&episode_add, podcast, &title),
+            AudioContainer::Unknown => {
+                let _ = tx.send(DownloadEvent::Error {
+                    message: format!(
+                        "Episode {} is not MP3 or MP4 audio — saved without tagging",
+                        feed_index
+                    ),
+                });
+                continue;
             }
         };
 
-        if podcast.remove_images {
-            tag.remove("APIC");
-        }
-
-        if podcast.overwrite_tags {
-            if podcast.overwrite_title {
-                if podcast.append_number_to_title {
-                    let leading_zeros = match podcast.leading_zeros_amount {
-                        0 => String::new(),
-                        _ => get_leading_zeros(&podcast.leading_zeros_amount, *feed_index),
-                    };
-                    tag.set_title(format!("{}{} {}", leading_zeros, feed_index, episode_title));
-                } else {
-                    tag.set_title(&episode_title);
-                }
+        match tagged {
+            Ok(true) => {
+                let _ = tx.send(DownloadEvent::Tagged {
+                    episode_name: episode_title,
+                });
             }
-
-            if podcast.overwrite_album_name {
-                tag.set_album(podcast.effective_album_name());
-            }
-
-            if podcast.overwrite_artist {
-                tag.set_album_artist(&podcast.artist);
-                tag.set_artist(&podcast.artist);
+            Ok(false) => {}
+            Err(e) => {
+                let _ = tx.send(DownloadEvent::Error {
+                    message: format!(
+                        "Failed to write tags for episode {} — skipping tagging: {}",
+                        feed_index, e
+                    ),
+                });
             }
         }
-
-        if let Err(e) = tag.write_to_path(&episode_add, tag.version()) {
-            let _ = tx.send(DownloadEvent::Error {
-                message: format!(
-                    "Failed to write tags for episode {} — skipping tagging: {}",
-                    feed_index, e
-                ),
-            });
-            continue;
-        }
-
-        let _ = tx.send(DownloadEvent::Tagged {
-            episode_name: episode_title,
-        });
     }
 
     let _ = tx.send(DownloadEvent::Finished);
     Ok(())
+}
+
+/// The audio container of a downloaded episode, sniffed from its first bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AudioContainer {
+    Mp3,
+    Mpeg4,
+    Unknown,
+}
+
+impl AudioContainer {
+    fn sniff(bytes: &[u8]) -> Self {
+        if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
+            Self::Mpeg4
+        } else if bytes.starts_with(b"ID3")
+            || (bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] & 0xE0 == 0xE0)
+        {
+            Self::Mp3
+        } else {
+            Self::Unknown
+        }
+    }
+
+    fn default_extension(self) -> &'static str {
+        match self {
+            Self::Mpeg4 => "m4a",
+            Self::Mp3 | Self::Unknown => "mp3",
+        }
+    }
+}
+
+fn tag_title(podcast: &Podcast, feed_index: usize, episode_title: &str) -> String {
+    if !podcast.append_number_to_title {
+        return episode_title.to_string();
+    }
+    let leading_zeros = match podcast.leading_zeros_amount {
+        0 => String::new(),
+        _ => get_leading_zeros(&podcast.leading_zeros_amount, feed_index),
+    };
+    format!("{}{} {}", leading_zeros, feed_index, episode_title)
+}
+
+/// Applies the podcast's tag settings as ID3; returns `false` when there was nothing to change.
+fn write_id3_tags(path: &Path, podcast: &Podcast, title: &str) -> Result<bool> {
+    let mut tag = if podcast.remove_existing_tags && podcast.overwrite_tags {
+        Tag::new()
+    } else {
+        match Tag::read_from_path(path) {
+            Ok(tag) => tag,
+            Err(Error {
+                kind: ErrorKind::NoTag,
+                ..
+            }) => {
+                if podcast.remove_images && !podcast.overwrite_tags {
+                    return Ok(false);
+                }
+                Tag::new()
+            }
+            Err(err) => return Err(err.into()),
+        }
+    };
+
+    if podcast.remove_images {
+        tag.remove("APIC");
+    }
+
+    if podcast.overwrite_tags {
+        if podcast.overwrite_title {
+            tag.set_title(title);
+        }
+        if podcast.overwrite_album_name {
+            tag.set_album(podcast.effective_album_name());
+        }
+        if podcast.overwrite_artist {
+            tag.set_album_artist(&podcast.artist);
+            tag.set_artist(&podcast.artist);
+        }
+    }
+
+    tag.write_to_path(path, tag.version())?;
+    Ok(true)
+}
+
+/// Applies the podcast's tag settings as MP4 metadata atoms, leaving the container intact.
+fn write_mp4_tags(path: &Path, podcast: &Podcast, title: &str) -> Result<bool> {
+    let mut tag = if podcast.remove_existing_tags && podcast.overwrite_tags {
+        mp4ameta::Userdata::default()
+    } else {
+        mp4ameta::Tag::read_from_path(path)?.userdata
+    };
+
+    if podcast.remove_images {
+        tag.remove_artworks();
+    }
+
+    if podcast.overwrite_tags {
+        if podcast.overwrite_title {
+            tag.set_title(title);
+        }
+        if podcast.overwrite_album_name {
+            tag.set_album(podcast.effective_album_name());
+        }
+        if podcast.overwrite_artist {
+            tag.set_album_artist(&podcast.artist);
+            tag.set_artist(&podcast.artist);
+        }
+    }
+
+    tag.write_to_path(path)?;
+    Ok(true)
 }
 
 fn get_leading_zeros(leading_zeros_amount: &usize, i: usize) -> String {
@@ -256,14 +336,27 @@ fn download_file_name(
     episode_title: &str,
     request_url: &Url,
     response_url: &Url,
+    container: AudioContainer,
 ) -> String {
+    let url_name = url_file_name(request_url).or_else(|| url_file_name(response_url));
+
     if overwrite_file_name {
-        return format!("{}.mp3", sanitize_filename(episode_title));
+        let extension = url_name
+            .as_deref()
+            .and_then(file_extension)
+            .unwrap_or_else(|| container.default_extension().to_string());
+        return format!("{}.{}", sanitize_filename(episode_title), extension);
     }
 
-    url_file_name(request_url)
-        .or_else(|| url_file_name(response_url))
-        .unwrap_or_else(|| "default.mp3".to_string())
+    url_name.unwrap_or_else(|| format!("default.{}", container.default_extension()))
+}
+
+fn file_extension(file_name: &str) -> Option<String> {
+    Path::new(file_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .filter(|e| !e.is_empty() && e.len() <= 4 && e.chars().all(|c| c.is_ascii_alphanumeric()))
+        .map(|e| e.to_ascii_lowercase())
 }
 
 fn url_file_name(url: &Url) -> Option<String> {
@@ -391,7 +484,13 @@ mod tests {
         let request_url = Url::parse("https://example.com/request.mp3").unwrap();
         let response_url = Url::parse("https://cdn.example.com/final.mp3").unwrap();
 
-        let result = download_file_name(true, "Episode Title", &request_url, &response_url);
+        let result = download_file_name(
+            true,
+            "Episode Title",
+            &request_url,
+            &response_url,
+            AudioContainer::Mp3,
+        );
 
         assert_eq!(result, "Episode Title.mp3");
     }
@@ -401,7 +500,13 @@ mod tests {
         let request_url = Url::parse("https://example.com/original-file.mp3").unwrap();
         let response_url = Url::parse("https://cdn.example.com/transcoded.mp3").unwrap();
 
-        let result = download_file_name(false, "Episode Title", &request_url, &response_url);
+        let result = download_file_name(
+            false,
+            "Episode Title",
+            &request_url,
+            &response_url,
+            AudioContainer::Mp3,
+        );
 
         assert_eq!(result, "original-file.mp3");
     }
@@ -411,7 +516,13 @@ mod tests {
         let request_url = Url::parse("https://example.com/").unwrap();
         let response_url = Url::parse("https://cdn.example.com/actual-file-123.mp3").unwrap();
 
-        let result = download_file_name(false, "Episode Title", &request_url, &response_url);
+        let result = download_file_name(
+            false,
+            "Episode Title",
+            &request_url,
+            &response_url,
+            AudioContainer::Mp3,
+        );
 
         assert_eq!(result, "actual-file-123.mp3");
     }
@@ -421,7 +532,13 @@ mod tests {
         let request_url = Url::parse("https://example.com/").unwrap();
         let response_url = Url::parse("https://cdn.example.com/").unwrap();
 
-        let result = download_file_name(false, "Episode Title", &request_url, &response_url);
+        let result = download_file_name(
+            false,
+            "Episode Title",
+            &request_url,
+            &response_url,
+            AudioContainer::Mp3,
+        );
 
         assert_eq!(result, "default.mp3");
     }
@@ -442,5 +559,82 @@ mod tests {
         let result = url_file_name(&url);
 
         assert_eq!(result, Some("test.mp3".to_string()));
+    }
+
+    #[test]
+    fn sniff_detects_mpeg4_by_ftyp_box() {
+        let bytes = b"\x00\x00\x00\x1cftypM4A \x00\x00\x02\x00";
+
+        assert_eq!(AudioContainer::sniff(bytes), AudioContainer::Mpeg4);
+    }
+
+    #[test]
+    fn sniff_detects_mp3_with_id3_header() {
+        assert_eq!(
+            AudioContainer::sniff(b"ID3\x04\x00\x00\x00\x00\x01\x1b"),
+            AudioContainer::Mp3
+        );
+    }
+
+    #[test]
+    fn sniff_detects_mp3_frame_sync() {
+        assert_eq!(
+            AudioContainer::sniff(&[0xFF, 0xFB, 0x90, 0x64]),
+            AudioContainer::Mp3
+        );
+    }
+
+    #[test]
+    fn sniff_reports_unknown_for_other_formats() {
+        assert_eq!(
+            AudioContainer::sniff(b"OggS\x00\x02"),
+            AudioContainer::Unknown
+        );
+        assert_eq!(AudioContainer::sniff(b""), AudioContainer::Unknown);
+    }
+
+    #[test]
+    fn overwrite_file_name_true_keeps_m4a_extension_from_url() {
+        let request_url = Url::parse("https://podcast.latent.space/audio/LL0YmIyBKSU.m4a").unwrap();
+
+        let result = download_file_name(
+            true,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Mpeg4,
+        );
+
+        assert_eq!(result, "Episode Title.m4a");
+    }
+
+    #[test]
+    fn overwrite_file_name_true_uses_container_extension_without_url_extension() {
+        let request_url = Url::parse("https://example.com/play/12345").unwrap();
+
+        let result = download_file_name(
+            true,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Mpeg4,
+        );
+
+        assert_eq!(result, "Episode Title.m4a");
+    }
+
+    #[test]
+    fn default_file_name_uses_container_extension() {
+        let request_url = Url::parse("https://example.com/").unwrap();
+
+        let result = download_file_name(
+            false,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Mpeg4,
+        );
+
+        assert_eq!(result, "default.m4a");
     }
 }
