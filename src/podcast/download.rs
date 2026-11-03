@@ -243,6 +243,19 @@ impl AudioContainer {
             Self::Mp3 | Self::Unknown => "mp3",
         }
     }
+
+    /// Audio extensions a file of this container may keep from its URL.
+    fn allowed_extensions(self) -> &'static [&'static str] {
+        match self {
+            Self::Mpeg4 => &["m4a", "m4b", "mp4", "aac"],
+            Self::Mp3 => &["mp3"],
+            Self::Unknown => &["mp3", "ogg", "oga", "opus", "flac", "wav", "aac"],
+        }
+    }
+
+    fn accepts_extension(self, extension: &str) -> bool {
+        self.allowed_extensions().contains(&extension)
+    }
 }
 
 fn tag_title(podcast: &Podcast, feed_index: usize, episode_title: &str) -> String {
@@ -340,15 +353,21 @@ fn download_file_name(
 ) -> String {
     let url_name = url_file_name(request_url).or_else(|| url_file_name(response_url));
 
+    let url_extension = url_name
+        .as_deref()
+        .and_then(file_extension)
+        .filter(|e| container.accepts_extension(e));
+
     if overwrite_file_name {
-        let extension = url_name
-            .as_deref()
-            .and_then(file_extension)
-            .unwrap_or_else(|| container.default_extension().to_string());
+        let extension = url_extension.unwrap_or_else(|| container.default_extension().to_string());
         return format!("{}.{}", sanitize_filename(episode_title), extension);
     }
 
-    url_name.unwrap_or_else(|| format!("default.{}", container.default_extension()))
+    match url_name {
+        Some(name) if url_extension.is_some() => name,
+        Some(name) => format!("{}.{}", name, container.default_extension()),
+        None => format!("default.{}", container.default_extension()),
+    }
 }
 
 fn file_extension(file_name: &str) -> Option<String> {
@@ -621,6 +640,51 @@ mod tests {
         );
 
         assert_eq!(result, "Episode Title.m4a");
+    }
+
+    #[test]
+    fn overwrite_file_name_true_rejects_non_audio_url_extension() {
+        let request_url = Url::parse("https://evil.example.com/payload.exe").unwrap();
+
+        let result = download_file_name(
+            true,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Mp3,
+        );
+
+        assert_eq!(result, "Episode Title.mp3");
+    }
+
+    #[test]
+    fn overwrite_file_name_true_rejects_extension_mismatching_container() {
+        let request_url = Url::parse("https://example.com/episode.mp3").unwrap();
+
+        let result = download_file_name(
+            true,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Mpeg4,
+        );
+
+        assert_eq!(result, "Episode Title.m4a");
+    }
+
+    #[test]
+    fn url_file_name_with_non_audio_extension_gets_audio_extension_appended() {
+        let request_url = Url::parse("https://evil.example.com/payload.exe").unwrap();
+
+        let result = download_file_name(
+            false,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Mp3,
+        );
+
+        assert_eq!(result, "payload.exe.mp3");
     }
 
     #[test]
