@@ -101,6 +101,7 @@ pub(super) fn draw_add_podcast(frame: &mut Frame, app: &mut App) {
                         txt.to_string(),
                         Style::default().fg(color).bold(),
                     ));
+                    spans.extend(convert_to_mp3_warning(p, si));
                 }
                 WizardStepKind::Usize => {
                     spans.push(Span::styled(
@@ -124,6 +125,7 @@ pub(super) fn draw_add_podcast(frame: &mut Frame, app: &mut App) {
                         ("no", TEXT_DIM)
                     };
                     spans.push(Span::styled(txt.to_string(), Style::default().fg(color)));
+                    spans.extend(convert_to_mp3_warning(p, si));
                 }
                 WizardStepKind::Usize => {
                     spans.push(Span::styled(

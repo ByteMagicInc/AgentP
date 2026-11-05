@@ -45,13 +45,13 @@ pub const WIZARD_STEPS: &[WizardStep] = &[
     },
     WizardStep {
         label: "Artist",
-        hint: "Only written to MP3s when tag writing is on — leave blank to skip",
+        hint: "Only written when tag writing is on — leave blank to skip",
         required: false,
         kind: WizardStepKind::Text,
     },
     WizardStep {
         label: "Write Tags",
-        hint: "Write ID3 metadata (album, artist, title) into downloaded MP3s",
+        hint: "Write album, artist and title tags into downloaded episodes (ID3 on MP3, MP4 metadata on M4A)",
         required: false,
         kind: WizardStepKind::Bool,
     },
@@ -69,13 +69,13 @@ pub const WIZARD_STEPS: &[WizardStep] = &[
     },
     WizardStep {
         label: "Write Album Tag",
-        hint: "Write the album name into the MP3 album tag",
+        hint: "Write the album name into the album tag",
         required: false,
         kind: WizardStepKind::Bool,
     },
     WizardStep {
         label: "Write Artist Tag",
-        hint: "Write the artist name into the MP3 artist tag",
+        hint: "Write the artist name into the artist tag",
         required: false,
         kind: WizardStepKind::Bool,
     },
@@ -86,8 +86,14 @@ pub const WIZARD_STEPS: &[WizardStep] = &[
         kind: WizardStepKind::Bool,
     },
     WizardStep {
+        label: "Convert To MP3",
+        hint: "Re-encode M4A, AAC, Ogg, FLAC or WAV episodes to MP3 (lossy) — requires ffmpeg on PATH; without it the original is kept",
+        required: false,
+        kind: WizardStepKind::Bool,
+    },
+    WizardStep {
         label: "Write Title Tag",
-        hint: "Write the episode title into the MP3 title tag",
+        hint: "Write the episode title into the title tag",
         required: false,
         kind: WizardStepKind::Bool,
     },
@@ -144,10 +150,10 @@ impl App {
     pub fn add_podcast_step_is_visible(&self, step: usize) -> bool {
         let p = &self.add_podcast.podcast;
         match step {
-            0..=5 | 13 => true,
-            6..=10 => p.overwrite_tags,
-            11 => p.overwrite_tags && p.overwrite_title,
-            12 => p.overwrite_tags && p.overwrite_title && p.append_number_to_title,
+            0..=5 | 10 | 14 => true,
+            6..=9 | 11 => p.overwrite_tags,
+            12 => p.overwrite_tags && p.overwrite_title,
+            13 => p.overwrite_tags && p.overwrite_title && p.append_number_to_title,
             _ => false,
         }
     }
@@ -165,7 +171,7 @@ impl App {
             1 => self.add_podcast.podcast.name = buf,
             2 => self.add_podcast.podcast.album_name = buf,
             3 => self.add_podcast.podcast.artist = buf,
-            13 => self.add_podcast.podcast.user_agent = buf,
+            14 => self.add_podcast.podcast.user_agent = buf,
             _ => {}
         }
     }
@@ -273,15 +279,16 @@ impl App {
             7 => p.overwrite_album_name = !p.overwrite_album_name,
             8 => p.overwrite_artist = !p.overwrite_artist,
             9 => p.overwrite_file_name = !p.overwrite_file_name,
-            10 => p.overwrite_title = !p.overwrite_title,
-            11 => p.append_number_to_title = !p.append_number_to_title,
+            10 => p.convert_to_mp3 = !p.convert_to_mp3,
+            11 => p.overwrite_title = !p.overwrite_title,
+            12 => p.append_number_to_title = !p.append_number_to_title,
             _ => {}
         }
     }
 
     /// Adjust the leading-zeros value by the given delta.
     pub fn add_podcast_adjust_usize(&mut self, delta: i64) {
-        if self.add_podcast.step == 12 {
+        if self.add_podcast.step == PODCAST_FIELD_USIZE {
             let current = self.add_podcast.podcast.leading_zeros_amount as i64;
             self.add_podcast.podcast.leading_zeros_amount = (current + delta).max(0) as usize;
         }
@@ -310,8 +317,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wizard_has_fourteen_steps() {
-        assert_eq!(WIZARD_STEPS.len(), 14);
+    fn wizard_has_fifteen_steps() {
+        assert_eq!(WIZARD_STEPS.len(), 15);
     }
 
     #[test]
@@ -334,6 +341,7 @@ mod tests {
                 "Write Album Tag",
                 "Write Artist Tag",
                 "Rename Files",
+                "Convert To MP3",
                 "Write Title Tag",
                 "Append Number To Title",
                 "Leading Zeros Amount",
@@ -372,7 +380,7 @@ mod tests {
             remove_images: true,
             ..Podcast::default()
         };
-        assert_eq!(p.field_text(13), "Custom/1.0");
+        assert_eq!(p.field_text(14), "Custom/1.0");
         assert!(p.field_bool(5), "remove_images must read true at index 5");
         assert!(
             !p.field_bool(4),
@@ -478,20 +486,39 @@ mod tests {
         app.add_podcast.step = 5;
 
         assert!(!app.add_podcast_next());
-        assert_eq!(app.add_podcast.step, 13);
+        assert_eq!(
+            WIZARD_STEPS[app.add_podcast.step].label, "Convert To MP3",
+            "converting is not a tag option, so it stays visible with tags off"
+        );
+
+        assert!(!app.add_podcast_next());
+        assert_eq!(app.add_podcast.step, 14);
 
         app.add_podcast.text_buffer = "Custom/1.0".into();
         assert!(app.add_podcast_next());
         assert_eq!(app.add_podcast.podcast.user_agent, "Custom/1.0");
 
         app.add_podcast_prev();
-        assert_eq!(app.add_podcast.step, 5);
+        assert_eq!(app.add_podcast.step, 10);
+    }
+
+    #[test]
+    fn convert_to_mp3_step_toggles_the_field() {
+        let mut app = test_app();
+        app.enter_add_podcast();
+        app.add_podcast.step = 10;
+        assert!(!app.add_podcast.podcast.convert_to_mp3);
+
+        app.add_podcast_toggle_bool();
+
+        assert!(app.add_podcast.podcast.convert_to_mp3);
+        assert!(app.add_podcast.podcast.field_bool(10));
     }
 
     #[test]
     fn user_agent_follows_the_last_enabled_tag_step() {
         for (overwrite_title, append_number_to_title, last_tag_step) in
-            [(false, true, 10), (true, false, 11), (true, true, 12)]
+            [(false, true, 11), (true, false, 12), (true, true, 13)]
         {
             let mut app = test_app();
             app.enter_add_podcast();
@@ -501,7 +528,7 @@ mod tests {
             app.add_podcast.step = last_tag_step;
 
             assert!(!app.add_podcast_next());
-            assert_eq!(app.add_podcast.step, 13);
+            assert_eq!(app.add_podcast.step, 14);
         }
     }
 }

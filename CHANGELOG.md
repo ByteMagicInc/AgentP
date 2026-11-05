@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Convert To MP3**, an optional per-podcast setting, off by default. When it is on, episodes a feed serves as M4A, AAC, Ogg, FLAC, or WAV are re-encoded to MP3 with ffmpeg and tagged like any other MP3. Turn it on in the podcast editor, in the add-podcast wizard, in **New Podcast Defaults**, or with `--convert-to-mp3 true`. It needs ffmpeg on `PATH`: the TUI shows a warning beside the setting, and `podcast add`/`podcast edit` print one, while ffmpeg is missing. Without ffmpeg, or when a conversion fails, the original file is kept and the download log shows a warning. Files AgentP cannot identify are never passed to ffmpeg, and ffmpeg runs with the input format fixed and local-file access only.
+- `agentp config show` reports whether ffmpeg was found. The Homebrew formula and Scoop manifest recommend ffmpeg after install without installing it.
+
+### Fixed
+
+- Episodes a feed serves as AAC audio (`.m4a`, `audio/mp4`) were left unplayable, because tagging wrote an MP3 ID3 tag in front of the MP4 data. They are now tagged with MP4 metadata and stay valid, or converted to MP3 when **Convert To MP3** is on. Raw AAC and other formats that are not converted are saved untagged, with a notice when tagging or image removal is on.
+- With **Rename Files** on, the file takes its extension from the enclosure URL when it matches the detected audio format, falling back to that format's default (`.mp3`, `.m4a`, or `.aac`), instead of always ending in `.mp3`.
+- A download keeps its URL's file extension only when it is an audio extension matching the downloaded format; otherwise an audio extension is added, so a feed cannot have AgentP save an episode as, say, an `.exe`.
+
 ## [0.3.0] - 2026-11-02
 
 ### Added

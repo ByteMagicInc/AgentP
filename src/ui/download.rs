@@ -83,11 +83,14 @@ pub(super) fn draw_download_progress(frame: &mut Frame, app: &mut App) {
     let mut items: Vec<ListItem> = progress
         .completed
         .iter()
-        .map(|name| {
-            let tagged = if progress.tagged.contains(name) {
-                "  tagged"
-            } else {
-                ""
+        .enumerate()
+        .map(|(row, name)| {
+            let converted = progress.converted.contains(&row);
+            let tagged = match (converted, progress.tagged.contains(&row)) {
+                (true, true) => "  converted to MP3 · tagged",
+                (true, false) => "  converted to MP3",
+                (false, true) => "  tagged",
+                (false, false) => "",
             };
             ListItem::new(Line::from(vec![
                 Span::styled("  + ", Style::default().fg(CHECK_ON)),
@@ -98,16 +101,21 @@ pub(super) fn draw_download_progress(frame: &mut Frame, app: &mut App) {
         .collect();
 
     let err_text_width = chunks[2].width.saturating_sub(6) as usize;
-    for err in &progress.errors {
-        let wrapped = wrap_words(err, err_text_width);
+    let notices = progress
+        .warnings
+        .iter()
+        .map(|message| (message, ORANGE))
+        .chain(progress.errors.iter().map(|message| (message, ERROR_FG)));
+    for (message, color) in notices {
+        let wrapped = wrap_words(message, err_text_width);
         let lines: Vec<Line> = wrapped
             .into_iter()
             .enumerate()
             .map(|(i, segment)| {
                 let prefix = if i == 0 { "  ! " } else { "    " };
                 Line::from(vec![
-                    Span::styled(prefix, Style::default().fg(ERROR_FG).bold()),
-                    Span::styled(segment, Style::default().fg(ERROR_FG)),
+                    Span::styled(prefix, Style::default().fg(color).bold()),
+                    Span::styled(segment, Style::default().fg(color)),
                 ])
             })
             .collect();
