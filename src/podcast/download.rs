@@ -183,6 +183,15 @@ pub async fn download_selected_episodes(
         let tagged = match container {
             AudioContainer::Mp3 => write_id3_tags(&episode_add, podcast, &title),
             AudioContainer::Mpeg4 => write_mp4_tags(&episode_add, podcast, &title),
+            AudioContainer::Adts => {
+                let _ = tx.send(DownloadEvent::Error {
+                    message: format!(
+                        "Episode {} is raw AAC audio, which has no tag format — saved without tagging",
+                        feed_index
+                    ),
+                });
+                continue;
+            }
             AudioContainer::Unknown => {
                 let _ = tx.send(DownloadEvent::Error {
                     message: format!(
@@ -221,25 +230,42 @@ pub async fn download_selected_episodes(
 enum AudioContainer {
     Mp3,
     Mpeg4,
+    Adts,
     Unknown,
 }
 
 impl AudioContainer {
+    /// MPEG audio frames and AAC ADTS frames share the leading sync bits; ADTS always
+    /// sets the two layer bits to `00`, which no MPEG audio frame uses.
     fn sniff(bytes: &[u8]) -> Self {
         if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
-            Self::Mpeg4
-        } else if bytes.starts_with(b"ID3")
-            || (bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] & 0xE0 == 0xE0)
-        {
-            Self::Mp3
-        } else {
+            return Self::Mpeg4;
+        }
+        if bytes.starts_with(b"ID3") {
+            return Self::Mp3;
+        }
+        if bytes.len() < 2 || bytes[0] != 0xFF || bytes[1] & 0xE0 != 0xE0 {
+            return Self::Unknown;
+        }
+        let version = (bytes[1] >> 3) & 0b11;
+        let layer = (bytes[1] >> 1) & 0b11;
+        if layer == 0 {
+            if bytes[1] & 0xF0 == 0xF0 {
+                Self::Adts
+            } else {
+                Self::Unknown
+            }
+        } else if version == 0b01 {
             Self::Unknown
+        } else {
+            Self::Mp3
         }
     }
 
     fn default_extension(self) -> &'static str {
         match self {
             Self::Mpeg4 => "m4a",
+            Self::Adts => "aac",
             Self::Mp3 | Self::Unknown => "mp3",
         }
     }
@@ -247,9 +273,10 @@ impl AudioContainer {
     /// Audio extensions a file of this container may keep from its URL.
     fn allowed_extensions(self) -> &'static [&'static str] {
         match self {
-            Self::Mpeg4 => &["m4a", "m4b", "mp4", "aac"],
+            Self::Mpeg4 => &["m4a", "m4b", "mp4"],
             Self::Mp3 => &["mp3"],
-            Self::Unknown => &["mp3", "ogg", "oga", "opus", "flac", "wav", "aac"],
+            Self::Adts => &["aac"],
+            Self::Unknown => &["mp3", "ogg", "oga", "opus", "flac", "wav"],
         }
     }
 
@@ -610,6 +637,53 @@ mod tests {
             AudioContainer::Unknown
         );
         assert_eq!(AudioContainer::sniff(b""), AudioContainer::Unknown);
+    }
+
+    #[test]
+    fn sniff_detects_raw_aac_adts_instead_of_mp3() {
+        assert_eq!(
+            AudioContainer::sniff(&[0xFF, 0xF1, 0x50, 0x80]),
+            AudioContainer::Adts
+        );
+        assert_eq!(
+            AudioContainer::sniff(&[0xFF, 0xF9, 0x50, 0x80]),
+            AudioContainer::Adts
+        );
+    }
+
+    #[test]
+    fn sniff_detects_mpeg2_and_mpeg25_layer3_as_mp3() {
+        assert_eq!(
+            AudioContainer::sniff(&[0xFF, 0xF3, 0x90, 0x64]),
+            AudioContainer::Mp3
+        );
+        assert_eq!(
+            AudioContainer::sniff(&[0xFF, 0xE3, 0x90, 0x64]),
+            AudioContainer::Mp3
+        );
+    }
+
+    #[test]
+    fn sniff_rejects_reserved_mpeg_version() {
+        assert_eq!(
+            AudioContainer::sniff(&[0xFF, 0xEA, 0x90, 0x64]),
+            AudioContainer::Unknown
+        );
+    }
+
+    #[test]
+    fn overwrite_file_name_true_names_raw_aac_with_aac_extension() {
+        let request_url = Url::parse("https://example.com/play/12345").unwrap();
+
+        let result = download_file_name(
+            true,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Adts,
+        );
+
+        assert_eq!(result, "Episode Title.aac");
     }
 
     #[test]

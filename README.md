@@ -2,7 +2,7 @@
 
 <p align="center"><strong>A fast, polished podcast downloader for your terminal.</strong></p>
 
-<p align="center">Browse feeds, select episodes, and write clean ID3 tags from an interactive TUI—or automate everything with the CLI.</p>
+<p align="center">Browse feeds, select episodes, and write clean tags (ID3 for MP3, MP4 metadata for M4A) from an interactive TUI—or automate everything with the CLI.</p>
 
 <p align="center">
   <a href="https://github.com/ByteMagicInc/AgentP/actions/workflows/release.yml"><img src="https://github.com/ByteMagicInc/AgentP/actions/workflows/release.yml/badge.svg" alt="Release status"></a>
@@ -294,8 +294,8 @@ Each entry in `podcasts.json` has the same shape as `default_podcast` plus its i
 | `album_name` | `--album-name` | Subfolder name and album tag; falls back to `name` when empty |
 | `artist` | `--artist` | Artist and album-artist tag |
 | `user_agent` | `--user-agent` | Custom `User-Agent` for this podcast's audio downloads; empty uses AgentP's default |
-| `overwrite_tags` | `--overwrite-tags` | Master switch for writing ID3 text tags |
-| `remove_existing_tags` | `--remove-existing-tags` | Drop the source file's ID3 tag and write a fresh minimal one (only when `overwrite_tags` is on) |
+| `overwrite_tags` | `--overwrite-tags` | Master switch for writing text tags: ID3 on MP3, MP4 metadata on M4A |
+| `remove_existing_tags` | `--remove-existing-tags` | Drop the source file's existing tag (ID3 or MP4 metadata) and write a fresh minimal one (only when `overwrite_tags` is on) |
 | `remove_images` | `--remove-images` | Strip embedded cover art; works even when `overwrite_tags` is off |
 | `overwrite_album_name` | `--overwrite-album-name` | Write the album tag |
 | `overwrite_artist` | `--overwrite-artist` | Write the artist and album-artist tags |
@@ -319,12 +319,14 @@ Downloads are organized by album name, which falls back to the podcast name when
 <download_dir>/
 └── <album_name>/
     ├── <episode>.mp3
-    └── <episode>.mp3
+    └── <episode>.m4a
 ```
 
-Without `overwrite_file_name`, the filename is the last path segment of the episode's enclosure URL (hosts that wrap the real file URL inside a redirect link, such as Anchor, are unwrapped), falling back to the final response URL and then `default.mp3`. With it, the file is renamed to `<sanitized episode title>.mp3`. Downloading an episode again overwrites the existing file.
+Without `overwrite_file_name`, the filename is the last path segment of the episode's enclosure URL (hosts that wrap the real file URL inside a redirect link, such as Anchor, are unwrapped), falling back to the final response URL and then `default.<ext>`. With it, the file is renamed to `<sanitized episode title>.<ext>`. Downloading an episode again overwrites the existing file.
 
-When `overwrite_tags` is on, AgentP writes the title, album, and artist plus album-artist frames that you have enabled and leaves every other frame alone. Turn on `remove_existing_tags` to discard the source file's tag first, which helps when a host embeds large metadata blocks that confuse players.
+AgentP checks the first bytes of each download to find its real format rather than trusting the URL or the server's `Content-Type`. A URL's extension is kept only when it is an audio extension matching that format (`mp3` for MP3; `m4a`, `m4b`, or `mp4` for MP4 audio; `aac` for raw AAC). Otherwise `<ext>` is the format's default (`mp3`, `m4a`, or `aac`), and a kept URL file name with any other extension gets that default appended, so a feed cannot make AgentP save an episode as, say, an `.exe`.
+
+When `overwrite_tags` is on, AgentP writes the title, album, and artist plus album-artist tags that you have enabled and leaves every other tag alone. MP3 files get ID3 frames and M4A files get MP4 metadata atoms; feeds can mix the two, as Latent Space does. Raw AAC and other formats are saved untagged, with a notice in the download log when tagging or image removal is on. Turn on `remove_existing_tags` to discard the source file's tag first, which helps when a host embeds large metadata blocks that confuse players.
 
 > [!NOTE]
 > Episode indices are **1-based, counted up from the feed's last item**, so in a feed that lists newest first, 1 is the oldest episode and the newest has the highest index. AgentP does not re-sort by publication date. This applies to `--episodes` and numeric title prefixes. With `leading_zeros_amount: 3`, episode 1 becomes `0001`, episode 10 becomes `0010`, and episode 100 becomes `0100`.
