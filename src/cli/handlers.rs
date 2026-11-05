@@ -120,6 +120,7 @@ async fn podcast_show(args: ShowPodcastArgs) -> Result<()> {
         "Rename files:          {}",
         bool_label(p.overwrite_file_name)
     );
+    println!("Convert to MP3:        {}", bool_label(p.convert_to_mp3));
     println!(
         "Append number:         {}",
         bool_label(p.append_number_to_title)
@@ -202,6 +203,9 @@ fn apply_podcast_fields(podcast: &mut Podcast, fields: PodcastFieldArgs) {
     }
     if let Some(v) = fields.overwrite_file_name {
         podcast.overwrite_file_name = v;
+    }
+    if let Some(v) = fields.convert_to_mp3 {
+        podcast.convert_to_mp3 = v;
     }
     if let Some(v) = fields.overwrite_title {
         podcast.overwrite_title = v;
@@ -342,6 +346,9 @@ async fn run_download(args: DownloadArgs) -> Result<()> {
             DownloadEvent::Completed { episode_name } => {
                 println!("  Downloaded: {}", episode_name);
             }
+            DownloadEvent::Converted { episode_name } => {
+                println!("  Converted to MP3: {}", episode_name);
+            }
             DownloadEvent::Tagged { episode_name } => {
                 println!("  Tagged: {}", episode_name);
             }
@@ -390,6 +397,7 @@ fn run_config(command: ConfigCommand) -> Result<()> {
                 "  rename_files:          {}",
                 bool_label(d.overwrite_file_name)
             );
+            println!("  convert_to_mp3:        {}", bool_label(d.convert_to_mp3));
             println!(
                 "  append_number:         {}",
                 bool_label(d.append_number_to_title)

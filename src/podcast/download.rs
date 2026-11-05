@@ -1,9 +1,10 @@
-//! Episode downloading with optional ID3 tagging.
+//! Episode downloading with optional MP3 conversion and tagging.
 
 use std::fs;
 use std::fs::File;
-use std::io::copy;
-use std::path::Path;
+use std::io::{self, copy};
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 
 use anyhow::Result;
 use id3::{Error, ErrorKind, Tag, TagLike};
@@ -12,7 +13,8 @@ use tokio::sync::mpsc;
 
 use super::data::{DownloadEvent, Podcast};
 
-/// Download selected episodes by feed index, writing files and optionally applying ID3 tags.
+/// Download selected episodes by feed index, writing files, optionally converting non-MP3
+/// audio to MP3 with `ffmpeg`, and optionally applying tags.
 pub async fn download_selected_episodes(
     main_path: &str,
     podcast: &Podcast,
@@ -35,6 +37,7 @@ pub async fn download_selected_episodes(
     }
 
     let total = feed_indices.len();
+    let mut ffmpeg_missing = false;
 
     for (idx, feed_index) in feed_indices.iter().enumerate() {
         if *feed_index == 0 || *feed_index > length {
@@ -175,6 +178,37 @@ pub async fn download_selected_episodes(
             episode_name: episode_title.clone(),
         });
 
+        let mut container = container;
+        let mut episode_add = episode_add;
+        if podcast.convert_to_mp3 && container != AudioContainer::Mp3 && !ffmpeg_missing {
+            let target = episode_add.with_extension("mp3");
+            match convert_to_mp3(&episode_add, &target).await {
+                Conversion::Converted => {
+                    episode_add = target;
+                    container = AudioContainer::Mp3;
+                    let _ = tx.send(DownloadEvent::Converted {
+                        episode_name: episode_title.clone(),
+                    });
+                }
+                Conversion::FfmpegMissing => {
+                    ffmpeg_missing = true;
+                    let _ = tx.send(DownloadEvent::Error {
+                        message: "ffmpeg was not found on PATH, so episodes are kept in their \
+                            original format — install ffmpeg or turn off Convert To MP3"
+                            .to_string(),
+                    });
+                }
+                Conversion::Failed(reason) => {
+                    let _ = tx.send(DownloadEvent::Error {
+                        message: format!(
+                            "Could not convert episode {} to MP3 — kept the original file: {}",
+                            feed_index, reason
+                        ),
+                    });
+                }
+            }
+        }
+
         if !podcast.overwrite_tags && !podcast.remove_images {
             continue;
         }
@@ -282,6 +316,95 @@ impl AudioContainer {
 
     fn accepts_extension(self, extension: &str) -> bool {
         self.allowed_extensions().contains(&extension)
+    }
+}
+
+/// Outcome of re-encoding one episode to MP3.
+enum Conversion {
+    Converted,
+    FfmpegMissing,
+    Failed(String),
+}
+
+/// Re-encodes `source` to MP3 at `target` with `ffmpeg`, keeping cover art and metadata.
+///
+/// `ffmpeg` writes to a `.part` file next to `target`, which is renamed into place only
+/// after it succeeds, and `source` is removed only after that, so every failure leaves
+/// the original download on disk. `source` and `target` may be the same path.
+async fn convert_to_mp3(source: &Path, target: &Path) -> Conversion {
+    let mut partial = target.as_os_str().to_owned();
+    partial.push(".part");
+    let partial = PathBuf::from(partial);
+
+    let output = tokio::process::Command::new("ffmpeg")
+        .args(["-y", "-nostdin", "-loglevel", "error", "-i"])
+        .arg(source)
+        .args(FFMPEG_MP3_ARGS)
+        .arg(&partial)
+        .stdin(Stdio::null())
+        .kill_on_drop(true)
+        .output()
+        .await;
+
+    let output = match output {
+        Ok(output) => output,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Conversion::FfmpegMissing,
+        Err(e) => return Conversion::Failed(format!("could not run ffmpeg: {}", e)),
+    };
+
+    if !output.status.success() {
+        let _ = fs::remove_file(&partial);
+        return Conversion::Failed(
+            ffmpeg_failure_reason(&output.stderr)
+                .unwrap_or_else(|| format!("ffmpeg exited with {}", output.status)),
+        );
+    }
+
+    if let Err(e) = fs::rename(&partial, target) {
+        let _ = fs::remove_file(&partial);
+        return Conversion::Failed(format!("could not move the MP3 into place: {}", e));
+    }
+
+    if source != target {
+        let _ = fs::remove_file(source);
+    }
+
+    Conversion::Converted
+}
+
+/// `ffmpeg` output options: first audio stream as LAME VBR quality 4 (about 130–165 kbps),
+/// cover art copied as an attached picture when present, and source metadata kept.
+const FFMPEG_MP3_ARGS: &[&str] = &[
+    "-map",
+    "0:a:0",
+    "-map",
+    "0:v?",
+    "-c:v",
+    "copy",
+    "-map_metadata",
+    "0",
+    "-codec:a",
+    "libmp3lame",
+    "-q:a",
+    "4",
+    "-id3v2_version",
+    "3",
+    "-f",
+    "mp3",
+];
+
+/// The last non-empty line of `ffmpeg`'s stderr, cut to 200 characters.
+fn ffmpeg_failure_reason(stderr: &[u8]) -> Option<String> {
+    let stderr = String::from_utf8_lossy(stderr);
+    let line = stderr
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| !line.is_empty())?;
+    if line.chars().count() > 200 {
+        Some(format!("{}…", line.chars().take(200).collect::<String>()))
+    } else {
+        Some(line.to_string())
     }
 }
 
@@ -759,6 +882,63 @@ mod tests {
         );
 
         assert_eq!(result, "payload.exe.mp3");
+    }
+
+    #[test]
+    fn converted_episode_keeps_url_stem_with_mp3_extension() {
+        let request_url = Url::parse("https://podcast.latent.space/audio/LL0YmIyBKSU.m4a").unwrap();
+
+        let name = download_file_name(
+            false,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Mpeg4,
+        );
+
+        assert_eq!(
+            Path::new(&name).with_extension("mp3"),
+            Path::new("LL0YmIyBKSU.mp3")
+        );
+    }
+
+    #[test]
+    fn converted_renamed_episode_uses_title_with_mp3_extension() {
+        let request_url = Url::parse("https://example.com/play/12345").unwrap();
+
+        let name = download_file_name(
+            true,
+            "Episode Title",
+            &request_url,
+            &request_url,
+            AudioContainer::Adts,
+        );
+
+        assert_eq!(
+            Path::new(&name).with_extension("mp3"),
+            Path::new("Episode Title.mp3")
+        );
+    }
+
+    #[test]
+    fn ffmpeg_failure_reason_uses_last_stderr_line() {
+        let stderr = b"first line
+Invalid data found when processing input
+
+";
+
+        assert_eq!(
+            ffmpeg_failure_reason(stderr).as_deref(),
+            Some("Invalid data found when processing input")
+        );
+        assert_eq!(
+            ffmpeg_failure_reason(
+                b"
+  
+"
+            ),
+            None
+        );
     }
 
     #[test]

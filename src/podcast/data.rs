@@ -81,6 +81,16 @@ pub struct Podcast {
     pub remove_existing_tags: bool,
     #[serde(default, alias = "remove_image")]
     pub remove_images: bool,
+    /// When true, episodes the feed serves in another format (M4A, AAC, Ogg, ...)
+    /// are re-encoded to MP3 with `ffmpeg` after download. The original is kept
+    /// when `ffmpeg` is missing or fails. Defaults to true, including for
+    /// podcasts saved before the option existed.
+    #[serde(default = "default_true")]
+    pub convert_to_mp3: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Podcast {
@@ -98,7 +108,7 @@ impl Podcast {
             1 => self.name.clone(),
             2 => self.album_name.clone(),
             3 => self.artist.clone(),
-            13 => self.user_agent.clone(),
+            14 => self.user_agent.clone(),
             _ => String::new(),
         }
     }
@@ -111,8 +121,9 @@ impl Podcast {
             7 => self.overwrite_album_name,
             8 => self.overwrite_artist,
             9 => self.overwrite_file_name,
-            10 => self.overwrite_title,
-            11 => self.append_number_to_title,
+            10 => self.convert_to_mp3,
+            11 => self.overwrite_title,
+            12 => self.append_number_to_title,
             _ => false,
         }
     }
@@ -159,6 +170,9 @@ pub enum DownloadEvent {
     Completed {
         episode_name: String,
     },
+    Converted {
+        episode_name: String,
+    },
     Tagged {
         episode_name: String,
     },
@@ -166,4 +180,48 @@ pub enum DownloadEvent {
         message: String,
     },
     Finished,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn convert_to_mp3_defaults_to_true_when_missing_from_saved_json() {
+        let podcast: Podcast = serde_json::from_str(
+            r#"{
+                "name": "Old Podcast",
+                "feed_url": "https://example.com/feed.xml",
+                "overwrite_tags": true,
+                "overwrite_album_name": true,
+                "overwrite_artist": true,
+                "overwrite_title": true,
+                "overwrite_file_name": false,
+                "leading_zeros_amount": 3
+            }"#,
+        )
+        .unwrap();
+
+        assert!(podcast.convert_to_mp3);
+    }
+
+    #[test]
+    fn convert_to_mp3_false_round_trips() {
+        let podcast = Podcast {
+            convert_to_mp3: false,
+            ..Podcast::default()
+        };
+
+        let json = serde_json::to_string(&podcast).unwrap();
+        let back: Podcast = serde_json::from_str(&json).unwrap();
+
+        assert!(json.contains("\"convert_to_mp3\":false"));
+        assert!(!back.convert_to_mp3);
+    }
+
+    #[test]
+    fn new_podcast_template_converts_to_mp3_by_default() {
+        assert!(Podcast::default().convert_to_mp3);
+        assert!(Podcast::default().field_bool(10));
+    }
 }

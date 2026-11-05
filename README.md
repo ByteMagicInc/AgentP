@@ -44,6 +44,8 @@
 > [!TIP]
 > Alpine and other minimal Linux distributions can use the fully static `x86_64-unknown-linux-musl` build.
 
+Some feeds publish episodes as M4A or other non-MP3 audio. AgentP converts those to MP3 by default, which needs [ffmpeg](https://ffmpeg.org/download.html) on your `PATH` (`brew install ffmpeg`, `scoop install ffmpeg`, or your distribution's package). Without ffmpeg, those episodes are kept in their original format and everything else works as usual.
+
 ## Quick start
 
 ### Interactive TUI
@@ -301,6 +303,7 @@ Each entry in `podcasts.json` has the same shape as `default_podcast` plus its i
 | `overwrite_artist` | `--overwrite-artist` | Write the artist and album-artist tags |
 | `overwrite_title` | `--overwrite-title` | Write the title tag |
 | `overwrite_file_name` | `--overwrite-file-name` | Rename the file to the episode title |
+| `convert_to_mp3` | `--convert-to-mp3` | Re-encode episodes served in another format (M4A, AAC, Ogg, ...) to MP3 with ffmpeg; on by default. Off keeps the feed's original format |
 | `append_number_to_title` | `--append-number-to-title` | Prefix the title tag with the episode number |
 | `leading_zeros_amount` | `--leading-zeros-amount` | Zero-padding for that number; `3` pads to four digits (`0001`), `0` disables |
 
@@ -319,14 +322,18 @@ Downloads are organized by album name, which falls back to the podcast name when
 <download_dir>/
 └── <album_name>/
     ├── <episode>.mp3
-    └── <episode>.m4a
+    └── <episode>.mp3
 ```
+
+Every episode lands as `.mp3` while `convert_to_mp3` is on, the default. Turn it off and an episode keeps the format the feed serves, such as `<episode>.m4a`.
 
 Without `overwrite_file_name`, the filename is the last path segment of the episode's enclosure URL (hosts that wrap the real file URL inside a redirect link, such as Anchor, are unwrapped), falling back to the final response URL and then `default.<ext>`. With it, the file is renamed to `<sanitized episode title>.<ext>`. Downloading an episode again overwrites the existing file.
 
 AgentP checks the first bytes of each download to find its real format rather than trusting the URL or the server's `Content-Type`. A URL's extension is kept only when it is an audio extension matching that format (`mp3` for MP3; `m4a`, `m4b`, or `mp4` for MP4 audio; `aac` for raw AAC). Otherwise `<ext>` is the format's default (`mp3`, `m4a`, or `aac`), and a kept URL file name with any other extension gets that default appended, so a feed cannot make AgentP save an episode as, say, an `.exe`.
 
-When `overwrite_tags` is on, AgentP writes the title, album, and artist plus album-artist tags that you have enabled and leaves every other tag alone. MP3 files get ID3 frames and M4A files get MP4 metadata atoms; feeds can mix the two, as Latent Space does. Raw AAC and other formats are saved untagged, with a notice in the download log when tagging or image removal is on. Turn on `remove_existing_tags` to discard the source file's tag first, which helps when a host embeds large metadata blocks that confuse players.
+With `convert_to_mp3` on, AgentP saves a non-MP3 download under that name, re-encodes it with ffmpeg to the same name ending in `.mp3` (LAME VBR quality 4, about 130–165 kbps, keeping cover art and the feed's metadata), and then deletes the original. A missing ffmpeg is reported once per download run and a failed conversion once per episode; in both cases the original file is kept and tagged as below. Conversion takes several seconds per episode.
+
+When `overwrite_tags` is on, AgentP writes the title, album, and artist plus album-artist tags that you have enabled and leaves every other tag alone. MP3 files, converted ones included, get ID3 frames. With `convert_to_mp3` off, or when conversion could not run, M4A files get MP4 metadata atoms, and raw AAC and other formats are saved untagged, with a notice in the download log when tagging or image removal is on. Turn on `remove_existing_tags` to discard the source file's tag first, which helps when a host embeds large metadata blocks that confuse players.
 
 > [!NOTE]
 > Episode indices are **1-based, counted up from the feed's last item**, so in a feed that lists newest first, 1 is the oldest episode and the newest has the highest index. AgentP does not re-sort by publication date. This applies to `--episodes` and numeric title prefixes. With `leading_zeros_amount: 3`, episode 1 becomes `0001`, episode 10 becomes `0010`, and episode 100 becomes `0100`.
@@ -336,6 +343,7 @@ When `overwrite_tags` is on, AgentP writes the title, album, and artist plus alb
 - **`... (internet-filter/proxy) blocked URL ...`** while downloading — the host answered with an HTML or text page instead of audio. This usually means a proxy or content filter intercepted the request, or the host rejected AgentP's `User-Agent`. Check the filter, or set `user_agent` on that podcast (`agentp podcast edit --podcast N --user-agent "..."`).
 - **`... (internet-filter/proxy) blocked URL ...`** when adding a podcast or loading its episodes — the feed request was redirected to another host that answered with a web page instead of RSS, the signature of a content filter. Ask for the feed's host to be allowed; `user_agent` applies only to audio downloads and does not change feed requests.
 - **A feed adds fine but every download fails** — some hosts (Buzzsprout's CDN, for example) refuse anonymous clients. AgentP sends `AgentP/<version>` by default; a browser-style `user_agent` on the podcast usually resolves it.
+- **`ffmpeg was not found on PATH`** — install ffmpeg so AgentP can convert non-MP3 episodes, or turn off `convert_to_mp3` on that podcast (`agentp podcast edit --podcast N --convert-to-mp3 false`) to keep their original format without the notice.
 - **`Episode index N is out of range`** — indices count up from the feed's last item, usually its oldest episode. Run `agentp podcast episodes --podcast N` to see the current numbering.
 - **Start over** — delete `config.json` and `podcasts.json` from the directory printed by `agentp config path`. The next launch recreates both, including the demo podcasts.
 

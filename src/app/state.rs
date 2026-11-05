@@ -56,6 +56,7 @@ pub struct DownloadProgress {
     pub current_index: usize,
     pub total: usize,
     pub completed: Vec<String>,
+    pub converted: Vec<String>,
     pub tagged: Vec<String>,
     pub finished: bool,
     pub errors: Vec<String>,
@@ -69,6 +70,7 @@ impl DownloadProgress {
             current_index: 0,
             total: 0,
             completed: Vec::new(),
+            converted: Vec::new(),
             tagged: Vec::new(),
             finished: false,
             errors: Vec::new(),
@@ -128,11 +130,11 @@ pub fn apply_list_jump(state: &mut ListState, len: usize, floor: usize, code: Ke
 /// Number of items in the config menu.
 pub const CONFIG_MENU_ITEM_COUNT: usize = 11;
 /// Total number of editable fields in the podcast editor.
-pub const PODCAST_FIELD_COUNT: usize = 14;
+pub const PODCAST_FIELD_COUNT: usize = 15;
 /// Index of the first boolean field in the podcast editor.
 pub const PODCAST_FIELD_BOOL_START: usize = 4;
 /// Index of the leading-zeros usize field in the podcast editor.
-pub const PODCAST_FIELD_USIZE: usize = 12;
+pub const PODCAST_FIELD_USIZE: usize = 13;
 
 /// UI state for the config menu screen.
 pub struct ConfigEditorState {
@@ -475,6 +477,9 @@ impl App {
             }
             DownloadEvent::Completed { episode_name } => {
                 self.download_progress.completed.push(episode_name);
+            }
+            DownloadEvent::Converted { episode_name } => {
+                self.download_progress.converted.push(episode_name);
             }
             DownloadEvent::Tagged { episode_name } => {
                 self.download_progress.tagged.push(episode_name);

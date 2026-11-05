@@ -84,10 +84,12 @@ pub(super) fn draw_download_progress(frame: &mut Frame, app: &mut App) {
         .completed
         .iter()
         .map(|name| {
-            let tagged = if progress.tagged.contains(name) {
-                "  tagged"
-            } else {
-                ""
+            let converted = progress.converted.contains(name);
+            let tagged = match (converted, progress.tagged.contains(name)) {
+                (true, true) => "  converted to MP3 · tagged",
+                (true, false) => "  converted to MP3",
+                (false, true) => "  tagged",
+                (false, false) => "",
             };
             ListItem::new(Line::from(vec![
                 Span::styled("  + ", Style::default().fg(CHECK_ON)),
