@@ -87,7 +87,7 @@ pub const WIZARD_STEPS: &[WizardStep] = &[
     },
     WizardStep {
         label: "Convert To MP3",
-        hint: "Re-encode episodes the feed serves as M4A, AAC, Ogg, FLAC or WAV to MP3 — needs ffmpeg on PATH; without it the original format is kept",
+        hint: "Re-encode M4A, AAC, Ogg, FLAC or WAV episodes to MP3 (lossy) — requires ffmpeg on PATH; without it the original is kept",
         required: false,
         kind: WizardStepKind::Bool,
     },
@@ -507,12 +507,12 @@ mod tests {
         let mut app = test_app();
         app.enter_add_podcast();
         app.add_podcast.step = 10;
-        assert!(app.add_podcast.podcast.convert_to_mp3);
+        assert!(!app.add_podcast.podcast.convert_to_mp3);
 
         app.add_podcast_toggle_bool();
 
-        assert!(!app.add_podcast.podcast.convert_to_mp3);
-        assert!(!app.add_podcast.podcast.field_bool(10));
+        assert!(app.add_podcast.podcast.convert_to_mp3);
+        assert!(app.add_podcast.podcast.field_bool(10));
     }
 
     #[test]

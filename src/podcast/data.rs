@@ -81,16 +81,12 @@ pub struct Podcast {
     pub remove_existing_tags: bool,
     #[serde(default, alias = "remove_image")]
     pub remove_images: bool,
-    /// When true, episodes the feed serves in another format (M4A, AAC, Ogg, ...)
-    /// are re-encoded to MP3 with `ffmpeg` after download. The original is kept
-    /// when `ffmpeg` is missing or fails. Defaults to true, including for
-    /// podcasts saved before the option existed.
-    #[serde(default = "default_true")]
+    /// When true, episodes the feed serves as M4A, AAC, Ogg, FLAC or WAV are
+    /// re-encoded to MP3 with `ffmpeg` after download. The original is kept when
+    /// `ffmpeg` is missing or fails. Off by default: it needs `ffmpeg` and the
+    /// re-encode is lossy.
+    #[serde(default)]
     pub convert_to_mp3: bool,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 impl Podcast {
@@ -176,6 +172,11 @@ pub enum DownloadEvent {
     Tagged {
         episode_name: String,
     },
+    /// Something went wrong but the episode is on disk and usable, such as a
+    /// conversion that could not run; it does not fail the download.
+    Warning {
+        message: String,
+    },
     Error {
         message: String,
     },
@@ -187,7 +188,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn convert_to_mp3_defaults_to_true_when_missing_from_saved_json() {
+    fn convert_to_mp3_defaults_to_false_when_missing_from_saved_json() {
         let podcast: Podcast = serde_json::from_str(
             r#"{
                 "name": "Old Podcast",
@@ -202,26 +203,34 @@ mod tests {
         )
         .unwrap();
 
-        assert!(podcast.convert_to_mp3);
+        assert!(!podcast.convert_to_mp3);
     }
 
     #[test]
-    fn convert_to_mp3_false_round_trips() {
+    fn convert_to_mp3_true_round_trips() {
         let podcast = Podcast {
-            convert_to_mp3: false,
+            convert_to_mp3: true,
             ..Podcast::default()
         };
 
         let json = serde_json::to_string(&podcast).unwrap();
         let back: Podcast = serde_json::from_str(&json).unwrap();
 
-        assert!(json.contains("\"convert_to_mp3\":false"));
-        assert!(!back.convert_to_mp3);
+        assert!(json.contains("\"convert_to_mp3\":true"));
+        assert!(back.convert_to_mp3);
     }
 
     #[test]
-    fn new_podcast_template_converts_to_mp3_by_default() {
-        assert!(Podcast::default().convert_to_mp3);
-        assert!(Podcast::default().field_bool(10));
+    fn new_podcast_template_does_not_convert_by_default() {
+        assert!(!Podcast::default().convert_to_mp3);
+        assert!(!Podcast::default().field_bool(10));
+    }
+
+    #[test]
+    fn default_config_json_agrees_with_the_serde_default() {
+        let template: serde_json::Value =
+            serde_json::from_str(include_str!("../../default.config.json")).unwrap();
+
+        assert_eq!(template["convert_to_mp3"], serde_json::Value::Bool(false));
     }
 }

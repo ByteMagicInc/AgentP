@@ -181,7 +181,7 @@ pub async fn download_selected_episodes(
         let mut container = container;
         let mut episode_add = episode_add;
         if podcast.convert_to_mp3 && container == AudioContainer::Unknown {
-            let _ = tx.send(DownloadEvent::Error {
+            let _ = tx.send(DownloadEvent::Warning {
                 message: format!(
                     "Episode {} is not a recognised audio format — saved as downloaded, \
                         without converting to MP3 or tagging",
@@ -198,7 +198,7 @@ pub async fn download_selected_episodes(
             match convert_to_mp3(&episode_add, &target, input_format).await {
                 Conversion::Converted { leftover } => {
                     if let Some(reason) = leftover {
-                        let _ = tx.send(DownloadEvent::Error {
+                        let _ = tx.send(DownloadEvent::Warning {
                             message: format!(
                                 "Converted episode {} to MP3 but could not delete the original {} — remove it by hand: {}",
                                 feed_index,
@@ -215,14 +215,14 @@ pub async fn download_selected_episodes(
                 }
                 Conversion::FfmpegMissing => {
                     ffmpeg_missing = true;
-                    let _ = tx.send(DownloadEvent::Error {
+                    let _ = tx.send(DownloadEvent::Warning {
                         message: "ffmpeg was not found on PATH, so episodes are kept in their \
                             original format — install ffmpeg or turn off Convert To MP3"
                             .to_string(),
                     });
                 }
                 Conversion::Failed(reason) => {
-                    let _ = tx.send(DownloadEvent::Error {
+                    let _ = tx.send(DownloadEvent::Warning {
                         message: format!(
                             "Could not convert episode {} to MP3 — kept the original file: {}",
                             feed_index, reason
@@ -244,7 +244,7 @@ pub async fn download_selected_episodes(
             | AudioContainer::Ogg
             | AudioContainer::Flac
             | AudioContainer::Wav => {
-                let _ = tx.send(DownloadEvent::Error {
+                let _ = tx.send(DownloadEvent::Warning {
                     message: format!(
                         "Episode {} is {} audio, which AgentP does not tag — saved without tagging",
                         feed_index,
@@ -254,7 +254,7 @@ pub async fn download_selected_episodes(
                 continue;
             }
             AudioContainer::Unknown => {
-                let _ = tx.send(DownloadEvent::Error {
+                let _ = tx.send(DownloadEvent::Warning {
                     message: format!(
                         "Episode {} is not MP3 or MP4 audio — saved without tagging",
                         feed_index

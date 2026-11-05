@@ -61,6 +61,7 @@ pub struct DownloadProgress {
     /// Positions in `completed` of episodes whose tags were written.
     pub tagged: Vec<usize>,
     pub finished: bool,
+    pub warnings: Vec<String>,
     pub errors: Vec<String>,
 }
 
@@ -75,6 +76,7 @@ impl DownloadProgress {
             converted: Vec::new(),
             tagged: Vec::new(),
             finished: false,
+            warnings: Vec::new(),
             errors: Vec::new(),
         }
     }
@@ -146,6 +148,8 @@ pub const PODCAST_FIELD_COUNT: usize = 15;
 pub const PODCAST_FIELD_BOOL_START: usize = 4;
 /// Index of the leading-zeros usize field in the podcast editor.
 pub const PODCAST_FIELD_USIZE: usize = 13;
+/// Index of the Convert To MP3 bool field in the podcast editor and wizard.
+pub const PODCAST_FIELD_CONVERT_TO_MP3: usize = 10;
 
 /// UI state for the config menu screen.
 pub struct ConfigEditorState {
@@ -499,6 +503,9 @@ impl App {
                     self.download_progress.tagged.push(row);
                 }
             }
+            DownloadEvent::Warning { message } => {
+                self.download_progress.warnings.push(message);
+            }
             DownloadEvent::Error { message } => {
                 self.download_progress.errors.push(message);
             }
@@ -805,5 +812,16 @@ mod tests {
         assert_eq!(app.download_progress.completed, vec!["Bonus", "Bonus"]);
         assert_eq!(app.download_progress.tagged, vec![0]);
         assert_eq!(app.download_progress.converted, vec![1]);
+    }
+
+    #[test]
+    fn warnings_are_kept_apart_from_errors() {
+        let mut app = test_app_one_podcast();
+        app.handle_download_event(DownloadEvent::Warning {
+            message: "ffmpeg was not found".into(),
+        });
+
+        assert_eq!(app.download_progress.warnings, vec!["ffmpeg was not found"]);
+        assert!(app.download_progress.errors.is_empty());
     }
 }

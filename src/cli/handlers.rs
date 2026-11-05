@@ -241,9 +241,11 @@ async fn podcast_add(args: AddPodcastArgs) -> Result<()> {
 
     apply_podcast_fields(&mut podcast, args.fields);
     let name = podcast.name.clone();
+    let converts = podcast.convert_to_mp3;
     config.podcasts.push(podcast);
     save_config(&config)?;
     println!("Added podcast \"{}\".", name);
+    warn_if_conversion_lacks_ffmpeg(converts);
     Ok(())
 }
 
@@ -260,7 +262,18 @@ fn podcast_edit(args: EditPodcastArgs) -> Result<()> {
     apply_podcast_fields(podcast, args.fields);
     save_config(&config)?;
     println!("Updated podcast \"{}\".", config.podcasts[idx].name);
+    warn_if_conversion_lacks_ffmpeg(config.podcasts[idx].convert_to_mp3);
     Ok(())
+}
+
+/// Tells the user, without failing, that Convert To MP3 is on but `ffmpeg` cannot run.
+fn warn_if_conversion_lacks_ffmpeg(convert_to_mp3: bool) {
+    if convert_to_mp3 && !crate::podcast::ffmpeg::probe() {
+        eprintln!(
+            "Warning: Convert To MP3 is on, but ffmpeg was not found on PATH. Episodes that \
+             are not MP3 will be kept in their original format until ffmpeg is installed."
+        );
+    }
 }
 
 fn podcast_delete(args: DeletePodcastArgs) -> Result<()> {
@@ -352,6 +365,9 @@ async fn run_download(args: DownloadArgs) -> Result<()> {
             DownloadEvent::Tagged { episode_name } => {
                 println!("  Tagged: {}", episode_name);
             }
+            DownloadEvent::Warning { message } => {
+                eprintln!("  Warning: {}", message);
+            }
             DownloadEvent::Error { message } => {
                 eprintln!("  Error: {}", message);
                 had_error = true;
@@ -398,6 +414,15 @@ fn run_config(command: ConfigCommand) -> Result<()> {
                 bool_label(d.overwrite_file_name)
             );
             println!("  convert_to_mp3:        {}", bool_label(d.convert_to_mp3));
+            println!();
+            println!(
+                "ffmpeg:         {}",
+                if crate::podcast::ffmpeg::probe() {
+                    "found"
+                } else {
+                    "not found on PATH (needed only for Convert To MP3)"
+                }
+            );
             println!(
                 "  append_number:         {}",
                 bool_label(d.append_number_to_title)

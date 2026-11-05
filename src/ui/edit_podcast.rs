@@ -153,6 +153,7 @@ fn podcast_field_lines<'a>(
                     Style::default().fg(color)
                 };
                 spans.push(Span::styled(txt.to_string(), style));
+                spans.extend(convert_to_mp3_warning(p, si));
             }
             WizardStepKind::Usize => {
                 if is_selected {

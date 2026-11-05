@@ -142,7 +142,7 @@ pub struct PodcastFieldArgs {
     pub overwrite_file_name: Option<bool>,
     #[arg(
         long,
-        help = "Re-encode episodes served as M4A, AAC, Ogg, FLAC or WAV to MP3 with ffmpeg; the original is kept when ffmpeg is missing or fails"
+        help = "Re-encode episodes served as M4A, AAC, Ogg, FLAC or WAV to MP3 with ffmpeg (off by default); the original is kept when ffmpeg is missing or fails"
     )]
     pub convert_to_mp3: Option<bool>,
     #[arg(long, help = "Write episode title into ID3 title tag")]

@@ -3,6 +3,7 @@
 mod config_files;
 mod data;
 mod download;
+pub mod ffmpeg;
 mod http;
 mod rss_feed;
 
