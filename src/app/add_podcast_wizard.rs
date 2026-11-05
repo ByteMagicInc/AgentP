@@ -87,7 +87,7 @@ pub const WIZARD_STEPS: &[WizardStep] = &[
     },
     WizardStep {
         label: "Convert To MP3",
-        hint: "Re-encode episodes the feed serves in another format (M4A, AAC, Ogg) to MP3 — needs ffmpeg on PATH; without it the original format is kept",
+        hint: "Re-encode episodes the feed serves as M4A, AAC, Ogg, FLAC or WAV to MP3 — needs ffmpeg on PATH; without it the original format is kept",
         required: false,
         kind: WizardStepKind::Bool,
     },

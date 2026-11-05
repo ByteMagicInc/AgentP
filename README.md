@@ -303,7 +303,7 @@ Each entry in `podcasts.json` has the same shape as `default_podcast` plus its i
 | `overwrite_artist` | `--overwrite-artist` | Write the artist and album-artist tags |
 | `overwrite_title` | `--overwrite-title` | Write the title tag |
 | `overwrite_file_name` | `--overwrite-file-name` | Rename the file to the episode title |
-| `convert_to_mp3` | `--convert-to-mp3` | Re-encode episodes served in another format (M4A, AAC, Ogg, ...) to MP3 with ffmpeg; on by default. Off keeps the feed's original format |
+| `convert_to_mp3` | `--convert-to-mp3` | Re-encode episodes served as M4A, AAC, Ogg, FLAC, or WAV to MP3 with ffmpeg; on by default. Off keeps the feed's original format |
 | `append_number_to_title` | `--append-number-to-title` | Prefix the title tag with the episode number |
 | `leading_zeros_amount` | `--leading-zeros-amount` | Zero-padding for that number; `3` pads to four digits (`0001`), `0` disables |
 
@@ -331,7 +331,7 @@ Without `overwrite_file_name`, the filename is the last path segment of the epis
 
 AgentP checks the first bytes of each download to find its real format rather than trusting the URL or the server's `Content-Type`. A URL's extension is kept only when it is an audio extension matching that format (`mp3` for MP3; `m4a`, `m4b`, or `mp4` for MP4 audio; `aac` for raw AAC). Otherwise `<ext>` is the format's default (`mp3`, `m4a`, or `aac`), and a kept URL file name with any other extension gets that default appended, so a feed cannot make AgentP save an episode as, say, an `.exe`.
 
-With `convert_to_mp3` on, AgentP saves a non-MP3 download under that name, re-encodes it with ffmpeg to the same name ending in `.mp3` (LAME VBR quality 4, about 130–165 kbps, keeping cover art and the feed's metadata), and then deletes the original. A missing ffmpeg is reported once per download run and a failed conversion once per episode; in both cases the original file is kept and tagged as below. Conversion takes several seconds per episode.
+With `convert_to_mp3` on, AgentP saves an M4A, AAC, Ogg, FLAC, or WAV download under that name, re-encodes it with ffmpeg to the same name ending in `.mp3` (LAME VBR quality 4, about 130–165 kbps, keeping cover art and the feed's metadata; a video episode keeps only its audio), and then deletes the original. A download AgentP cannot identify as one of those formats is never handed to ffmpeg; it is saved as downloaded, with a notice. ffmpeg is told the input format and may only read local files, so a feed cannot use a disguised playlist to make it fetch URLs or read other files. A missing ffmpeg is reported once per download run and a failed conversion once per episode; in both cases the original file is kept and tagged as below, and `agentp download` exits non-zero. Conversion takes several seconds per episode; stopping AgentP mid-conversion can leave a `<episode>.mp3.part` file beside the original, which the next download of that episode replaces.
 
 When `overwrite_tags` is on, AgentP writes the title, album, and artist plus album-artist tags that you have enabled and leaves every other tag alone. MP3 files, converted ones included, get ID3 frames. With `convert_to_mp3` off, or when conversion could not run, M4A files get MP4 metadata atoms, and raw AAC and other formats are saved untagged, with a notice in the download log when tagging or image removal is on. Turn on `remove_existing_tags` to discard the source file's tag first, which helps when a host embeds large metadata blocks that confuse players.
 

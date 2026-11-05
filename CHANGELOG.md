@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Convert To MP3**, a per-podcast setting that is on by default: episodes a feed serves as M4A, AAC, Ogg, or another non-MP3 format are re-encoded to MP3 with ffmpeg and tagged like any other MP3. It needs ffmpeg on `PATH`; without it, or when a conversion fails, the original file is kept and the download log says why. Turn it off in the podcast editor, the add-podcast wizard, or with `--convert-to-mp3 false` to keep the feed's own format. Podcasts saved before this release have it on.
+- **Convert To MP3**, a per-podcast setting that is on by default: episodes a feed serves as M4A, AAC, Ogg, FLAC, or WAV are re-encoded to MP3 with ffmpeg and tagged like any other MP3. It needs ffmpeg on `PATH`; without it, or when a conversion fails, the original file is kept and the download log says why. Files AgentP cannot identify are never passed to ffmpeg, and ffmpeg runs with the input format fixed and local-file access only. Turn it off in the podcast editor, the add-podcast wizard, or with `--convert-to-mp3 false` to keep the feed's own format. Podcasts saved before this release have it on.
 
 ### Fixed
 

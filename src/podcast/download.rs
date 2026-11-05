@@ -180,9 +180,22 @@ pub async fn download_selected_episodes(
 
         let mut container = container;
         let mut episode_add = episode_add;
-        if podcast.convert_to_mp3 && container != AudioContainer::Mp3 && !ffmpeg_missing {
+        if podcast.convert_to_mp3 && container == AudioContainer::Unknown {
+            let _ = tx.send(DownloadEvent::Error {
+                message: format!(
+                    "Episode {} is not a recognised audio format — saved as downloaded, \
+                        without converting to MP3 or tagging",
+                    feed_index
+                ),
+            });
+            continue;
+        }
+        if podcast.convert_to_mp3
+            && !ffmpeg_missing
+            && let Some(input_format) = container.ffmpeg_input_format()
+        {
             let target = episode_add.with_extension("mp3");
-            match convert_to_mp3(&episode_add, &target).await {
+            match convert_to_mp3(&episode_add, &target, input_format).await {
                 Conversion::Converted => {
                     episode_add = target;
                     container = AudioContainer::Mp3;
@@ -217,11 +230,15 @@ pub async fn download_selected_episodes(
         let tagged = match container {
             AudioContainer::Mp3 => write_id3_tags(&episode_add, podcast, &title),
             AudioContainer::Mpeg4 => write_mp4_tags(&episode_add, podcast, &title),
-            AudioContainer::Adts => {
+            AudioContainer::Adts
+            | AudioContainer::Ogg
+            | AudioContainer::Flac
+            | AudioContainer::Wav => {
                 let _ = tx.send(DownloadEvent::Error {
                     message: format!(
-                        "Episode {} is raw AAC audio, which has no tag format — saved without tagging",
-                        feed_index
+                        "Episode {} is {} audio, which AgentP does not tag — saved without tagging",
+                        feed_index,
+                        container.label()
                     ),
                 });
                 continue;
@@ -265,6 +282,9 @@ enum AudioContainer {
     Mp3,
     Mpeg4,
     Adts,
+    Ogg,
+    Flac,
+    Wav,
     Unknown,
 }
 
@@ -274,6 +294,15 @@ impl AudioContainer {
     fn sniff(bytes: &[u8]) -> Self {
         if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
             return Self::Mpeg4;
+        }
+        if bytes.starts_with(b"OggS") {
+            return Self::Ogg;
+        }
+        if bytes.starts_with(b"fLaC") {
+            return Self::Flac;
+        }
+        if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WAVE" {
+            return Self::Wav;
         }
         if bytes.starts_with(b"ID3") {
             return Self::Mp3;
@@ -300,6 +329,9 @@ impl AudioContainer {
         match self {
             Self::Mpeg4 => "m4a",
             Self::Adts => "aac",
+            Self::Ogg => "ogg",
+            Self::Flac => "flac",
+            Self::Wav => "wav",
             Self::Mp3 | Self::Unknown => "mp3",
         }
     }
@@ -310,7 +342,36 @@ impl AudioContainer {
             Self::Mpeg4 => &["m4a", "m4b", "mp4"],
             Self::Mp3 => &["mp3"],
             Self::Adts => &["aac"],
+            Self::Ogg => &["ogg", "oga", "opus"],
+            Self::Flac => &["flac"],
+            Self::Wav => &["wav"],
             Self::Unknown => &["mp3", "ogg", "oga", "opus", "flac", "wav"],
+        }
+    }
+
+    /// The `ffmpeg` demuxer for this container, passed with `-f` so `ffmpeg` never
+    /// probes an untrusted file into a playlist or concat demuxer. `None` means the
+    /// file is not converted: it is already MP3, or it was not positively identified.
+    fn ffmpeg_input_format(self) -> Option<&'static str> {
+        match self {
+            Self::Mpeg4 => Some("mov"),
+            Self::Adts => Some("aac"),
+            Self::Ogg => Some("ogg"),
+            Self::Flac => Some("flac"),
+            Self::Wav => Some("wav"),
+            Self::Mp3 | Self::Unknown => None,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Mp3 => "MP3",
+            Self::Mpeg4 => "MP4",
+            Self::Adts => "raw AAC",
+            Self::Ogg => "Ogg",
+            Self::Flac => "FLAC",
+            Self::Wav => "WAV",
+            Self::Unknown => "unrecognised",
         }
     }
 
@@ -330,57 +391,110 @@ enum Conversion {
 ///
 /// `ffmpeg` writes to a `.part` file next to `target`, which is renamed into place only
 /// after it succeeds, and `source` is removed only after that, so every failure leaves
-/// the original download on disk. `source` and `target` may be the same path.
-async fn convert_to_mp3(source: &Path, target: &Path) -> Conversion {
+/// the original download on disk. `source` and `target` may be the same path. When
+/// copying a video stream fails, which happens for real video rather than cover art,
+/// the conversion is retried once with video dropped.
+async fn convert_to_mp3(source: &Path, target: &Path, input_format: &str) -> Conversion {
+    let (source, target) = match (std::path::absolute(source), std::path::absolute(target)) {
+        (Ok(source), Ok(target)) => (source, target),
+        (Err(e), _) | (_, Err(e)) => {
+            return Conversion::Failed(format!("could not resolve the file path: {}", e));
+        }
+    };
     let mut partial = target.as_os_str().to_owned();
     partial.push(".part");
     let partial = PathBuf::from(partial);
 
-    let output = tokio::process::Command::new("ffmpeg")
-        .args(["-y", "-nostdin", "-loglevel", "error", "-i"])
-        .arg(source)
-        .args(FFMPEG_MP3_ARGS)
-        .arg(&partial)
-        .stdin(Stdio::null())
-        .kill_on_drop(true)
-        .output()
-        .await;
-
-    let output = match output {
-        Ok(output) => output,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Conversion::FfmpegMissing,
-        Err(e) => return Conversion::Failed(format!("could not run ffmpeg: {}", e)),
-    };
-
-    if !output.status.success() {
-        let _ = fs::remove_file(&partial);
-        return Conversion::Failed(
-            ffmpeg_failure_reason(&output.stderr)
-                .unwrap_or_else(|| format!("ffmpeg exited with {}", output.status)),
-        );
+    let mut result = run_ffmpeg(&source, &partial, input_format, FFMPEG_KEEP_ART_ARGS).await;
+    if matches!(result, FfmpegRun::Failed(_)) {
+        result = run_ffmpeg(&source, &partial, input_format, FFMPEG_DROP_VIDEO_ARGS).await;
     }
 
-    if let Err(e) = fs::rename(&partial, target) {
+    match result {
+        FfmpegRun::Succeeded => {}
+        FfmpegRun::Missing => return Conversion::FfmpegMissing,
+        FfmpegRun::Failed(reason) => {
+            let _ = fs::remove_file(&partial);
+            return Conversion::Failed(reason);
+        }
+    }
+
+    if let Err(e) = fs::rename(&partial, &target) {
         let _ = fs::remove_file(&partial);
         return Conversion::Failed(format!("could not move the MP3 into place: {}", e));
     }
 
     if source != target {
-        let _ = fs::remove_file(source);
+        let _ = fs::remove_file(&source);
     }
 
     Conversion::Converted
 }
 
-/// `ffmpeg` output options: first audio stream as LAME VBR quality 4 (about 130–165 kbps),
-/// cover art copied as an attached picture when present, and source metadata kept.
-const FFMPEG_MP3_ARGS: &[&str] = &[
-    "-map",
-    "0:a:0",
-    "-map",
-    "0:v?",
-    "-c:v",
-    "copy",
+enum FfmpegRun {
+    Succeeded,
+    Missing,
+    Failed(String),
+}
+
+/// Runs one `ffmpeg` conversion from `source` to `output`, both absolute paths.
+///
+/// The input demuxer is forced with `-f`, only the `file` protocol is allowed, and both
+/// paths carry a `file:` prefix so a path can never be read as an option or a URL.
+async fn run_ffmpeg(
+    source: &Path,
+    output: &Path,
+    input_format: &str,
+    stream_args: &[&str],
+) -> FfmpegRun {
+    let result = tokio::process::Command::new("ffmpeg")
+        .args(FFMPEG_INPUT_ARGS)
+        .args(["-f", input_format, "-i"])
+        .arg(file_url(source))
+        .args(stream_args)
+        .args(FFMPEG_OUTPUT_ARGS)
+        .arg(file_url(output))
+        .stdin(Stdio::null())
+        .kill_on_drop(true)
+        .output()
+        .await;
+
+    match result {
+        Ok(out) if out.status.success() => FfmpegRun::Succeeded,
+        Ok(out) => FfmpegRun::Failed(
+            ffmpeg_failure_reason(&out.stderr)
+                .unwrap_or_else(|| format!("ffmpeg exited with {}", out.status)),
+        ),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => FfmpegRun::Missing,
+        Err(e) => FfmpegRun::Failed(format!("could not run ffmpeg: {}", e)),
+    }
+}
+
+fn file_url(path: &Path) -> std::ffi::OsString {
+    let mut url = std::ffi::OsString::from("file:");
+    url.push(path.as_os_str());
+    url
+}
+
+/// Global and input options: overwrite, never read the terminal, errors only, and no
+/// protocol but local files.
+const FFMPEG_INPUT_ARGS: &[&str] = &[
+    "-y",
+    "-nostdin",
+    "-loglevel",
+    "error",
+    "-protocol_whitelist",
+    "file",
+];
+
+/// First audio stream, plus cover art copied as an attached picture when present.
+const FFMPEG_KEEP_ART_ARGS: &[&str] = &["-map", "0:a:0", "-map", "0:v?", "-c:v", "copy"];
+
+/// First audio stream only, for sources whose video stream MP3 cannot hold.
+const FFMPEG_DROP_VIDEO_ARGS: &[&str] = &["-map", "0:a:0", "-vn"];
+
+/// Encoding: LAME VBR quality 4 (about 130–165 kbps) with the source metadata kept.
+const FFMPEG_OUTPUT_ARGS: &[&str] = &[
     "-map_metadata",
     "0",
     "-codec:a",
@@ -756,12 +870,65 @@ mod tests {
     #[test]
     fn sniff_reports_unknown_for_other_formats() {
         assert_eq!(
-            AudioContainer::sniff(b"OggS\x00\x02"),
+            AudioContainer::sniff(b"<html><body>"),
             AudioContainer::Unknown
         );
         assert_eq!(AudioContainer::sniff(b""), AudioContainer::Unknown);
     }
 
+    #[test]
+    fn sniff_detects_ogg_flac_and_wav_by_magic_bytes() {
+        assert_eq!(
+            AudioContainer::sniff(b"OggS\x00\x02\x00\x00"),
+            AudioContainer::Ogg
+        );
+        assert_eq!(
+            AudioContainer::sniff(b"fLaC\x00\x00\x00\x22"),
+            AudioContainer::Flac
+        );
+        assert_eq!(
+            AudioContainer::sniff(b"RIFF\x24\x08\x00\x00WAVEfmt "),
+            AudioContainer::Wav
+        );
+        assert_eq!(
+            AudioContainer::sniff(b"RIFF\x24\x08\x00\x00AVI LIST"),
+            AudioContainer::Unknown
+        );
+    }
+
+    #[test]
+    fn only_positively_identified_non_mp3_formats_are_converted() {
+        assert_eq!(AudioContainer::Mpeg4.ffmpeg_input_format(), Some("mov"));
+        assert_eq!(AudioContainer::Adts.ffmpeg_input_format(), Some("aac"));
+        assert_eq!(AudioContainer::Ogg.ffmpeg_input_format(), Some("ogg"));
+        assert_eq!(AudioContainer::Flac.ffmpeg_input_format(), Some("flac"));
+        assert_eq!(AudioContainer::Wav.ffmpeg_input_format(), Some("wav"));
+        assert_eq!(AudioContainer::Mp3.ffmpeg_input_format(), None);
+        assert_eq!(
+            AudioContainer::Unknown.ffmpeg_input_format(),
+            None,
+            "an unidentified file must never reach ffmpeg, which would probe it"
+        );
+    }
+
+    #[test]
+    fn sniff_treats_playlists_and_concat_lists_as_unknown() {
+        assert_eq!(
+            AudioContainer::sniff(b"#EXTM3U\n#EXT-X-TARGETDURATION:1\n"),
+            AudioContainer::Unknown
+        );
+        assert_eq!(
+            AudioContainer::sniff(b"ffconcat version 1.0\nfile /etc/passwd\n"),
+            AudioContainer::Unknown
+        );
+    }
+
+    #[test]
+    fn ffmpeg_paths_carry_a_file_prefix() {
+        let url = file_url(Path::new("-i evil.m4a"));
+
+        assert_eq!(url, std::ffi::OsString::from("file:-i evil.m4a"));
+    }
     #[test]
     fn sniff_detects_raw_aac_adts_instead_of_mp3() {
         assert_eq!(
