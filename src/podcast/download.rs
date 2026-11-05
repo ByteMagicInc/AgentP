@@ -196,7 +196,17 @@ pub async fn download_selected_episodes(
         {
             let target = episode_add.with_extension("mp3");
             match convert_to_mp3(&episode_add, &target, input_format).await {
-                Conversion::Converted => {
+                Conversion::Converted { leftover } => {
+                    if let Some(reason) = leftover {
+                        let _ = tx.send(DownloadEvent::Error {
+                            message: format!(
+                                "Converted episode {} to MP3 but could not delete the original {} — remove it by hand: {}",
+                                feed_index,
+                                episode_add.display(),
+                                reason
+                            ),
+                        });
+                    }
                     episode_add = target;
                     container = AudioContainer::Mp3;
                     let _ = tx.send(DownloadEvent::Converted {
@@ -382,7 +392,10 @@ impl AudioContainer {
 
 /// Outcome of re-encoding one episode to MP3.
 enum Conversion {
-    Converted,
+    /// The MP3 is in place; carries the reason when the original could not be deleted.
+    Converted {
+        leftover: Option<String>,
+    },
     FfmpegMissing,
     Failed(String),
 }
@@ -424,11 +437,13 @@ async fn convert_to_mp3(source: &Path, target: &Path, input_format: &str) -> Con
         return Conversion::Failed(format!("could not move the MP3 into place: {}", e));
     }
 
-    if source != target {
-        let _ = fs::remove_file(&source);
-    }
+    let leftover = if source != target {
+        fs::remove_file(&source).err().map(|e| e.to_string())
+    } else {
+        None
+    };
 
-    Conversion::Converted
+    Conversion::Converted { leftover }
 }
 
 enum FfmpegRun {

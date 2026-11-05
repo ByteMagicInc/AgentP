@@ -321,11 +321,11 @@ Downloads are organized by album name, which falls back to the podcast name when
 ```text
 <download_dir>/
 └── <album_name>/
-    ├── <episode>.mp3
-    └── <episode>.mp3
+    ├── <first episode>.mp3
+    └── <second episode>.mp3
 ```
 
-Every episode lands as `.mp3` while `convert_to_mp3` is on, the default. Turn it off and an episode keeps the format the feed serves, such as `<episode>.m4a`.
+With `convert_to_mp3` on, the default, every episode lands as `.mp3` once its conversion succeeds. An episode keeps the format the feed serves, such as `<episode>.m4a`, when `convert_to_mp3` is off, when ffmpeg is missing or the conversion fails, or when AgentP cannot identify the file's format.
 
 Without `overwrite_file_name`, the filename is the last path segment of the episode's enclosure URL (hosts that wrap the real file URL inside a redirect link, such as Anchor, are unwrapped), falling back to the final response URL and then `default.<ext>`. With it, the file is renamed to `<sanitized episode title>.<ext>`. Downloading an episode again overwrites the existing file.
 

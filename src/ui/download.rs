@@ -83,9 +83,10 @@ pub(super) fn draw_download_progress(frame: &mut Frame, app: &mut App) {
     let mut items: Vec<ListItem> = progress
         .completed
         .iter()
-        .map(|name| {
-            let converted = progress.converted.contains(name);
-            let tagged = match (converted, progress.tagged.contains(name)) {
+        .enumerate()
+        .map(|(row, name)| {
+            let converted = progress.converted.contains(&row);
+            let tagged = match (converted, progress.tagged.contains(&row)) {
                 (true, true) => "  converted to MP3 · tagged",
                 (true, false) => "  converted to MP3",
                 (false, true) => "  tagged",
