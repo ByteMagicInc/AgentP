@@ -77,7 +77,7 @@ Podcast selectors accept either a 1-based index or a case-insensitive name. A su
 ### Search episodes and jump to one by number
 
 <p align="center">
-  <img src="docs/assets/search-and-jump.gif" alt="Searching Merge Conflict's episodes for copilot since 2025, selecting a match, clearing the filter, jumping to episode 500, and finding both actions in the command palette" width="1572">
+  <img src="docs/assets/search-and-jump.gif" alt="Searching Merge Conflict's episodes for copilot since 2025 without SDK episodes, with the matches underlined, selecting one, clearing the filter, jumping to episode 500, and finding both actions in the command palette" width="1572">
 </p>
 
 ### Add a podcast from its RSS feed
@@ -157,18 +157,21 @@ Deleting is the one confirmation that does not take `Enter`. `Enter` opens a pod
 
 Every row starts with its episode number, the same numbering `--episodes` uses: numbers count up from the feed's last item, so in a feed that lists newest first, `1` is the oldest episode and the highest number is the newest.
 
-**Search.** Press `/` and type; the list narrows as you type. Several terms must all match, in any order, ignoring case:
+**Search.** Press `/` and type; the list narrows as you type, and the matching words are underlined in each title. Several terms must all match, in any order, ignoring case:
 
 | Term | Matches | Examples |
 |---|---|---|
 | A word | The title, the description, or the date as the list shows it, including the full month name | `copilot`, `sep`, `september`, `2025` |
-| A date | Episodes published that day, month first, with dashes or slashes and with or without leading zeros | `11/2/2026`, `11-02-2026`, `2026-11-02` |
-| A month | Episodes published that month | `11/2026`, `2026-11` |
+| A `"phrase"` | Those words together, in that order; it narrows while you type it, before the closing quote | `"github copilot"` |
+| `-` before a term | Episodes that do **not** match it | `-intro`, `-"live show"`, `-11/2026` |
+| A date | Episodes published that day. With slashes or dashes the month comes first (`11/2/2026` is November 2); a four-digit year at the front reads year, month, day (ISO). Leading zeros are optional | `11/2/2026`, `11-02-2026`, `2026-11-02` |
+| A month | Episodes published that month, month first or year first | `11/2026`, `2026-11` |
 | A month and day | That day in any year | `9/10` |
-| `since:` / `until:` | On or after / on or before a date, month, or year | `since:2026-01`, `until:2025` |
-| `after:` / `before:` | Strictly after / before a date, month, or year | `after:9/10/2025`, `before:2026` |
+| `#` and a number | That episode number, or an inclusive range | `#500`, `#100-120` |
+| `since:` / `until:` | On or after / on or before a date, month, year, or relative day | `since:2026-01`, `until:2025`, `since:30d` |
+| `after:` / `before:` | Strictly after / before the same | `after:9/10/2025`, `before:2026`, `before:1y` |
 
-A date written in a title, such as `9/11`, still matches that title. While a range term is unfinished, such as `after:20`, it is left out and the search bar says what it needs. An episode whose feed date AgentP cannot read shows no date in the list; its words still match the date as the feed wrote it, but it never falls inside a range.
+A relative day counts back from today: `today`, `yesterday`, or a number of days, weeks, months, or years such as `30d`, `2w`, `6m`, `1y`. A date written in a title, such as `9/11`, still matches that title, and a hashtag such as `#MacBookNeo` is a plain word. While a range term is unfinished, such as `after:20`, it is left out and the search bar says what it needs. An episode whose feed date AgentP cannot read shows no date in the list; its words still match the date as the feed wrote it, but it never falls inside a range.
 
 `Enter` keeps the filter and returns to the list; `Esc` puts back the filter the search opened with. On the list, `Esc` clears an active filter. Pasting into the search turns line breaks into spaces. Selections are kept while the list is narrowed, and `Download` fetches every selected episode, including any the search is currently hiding.
 
@@ -250,7 +253,7 @@ agentp podcast list
 agentp podcast list --no-fetch
 agentp podcast show --podcast "Darknet Diaries"
 agentp podcast episodes --podcast 1 --limit 20
-agentp podcast episodes --podcast 1 --search "copilot since:2026-01"
+agentp podcast episodes --podcast 1 --search 'copilot since:30d -intro'
 agentp podcast add --name "My Show" --feed-url https://example.com/feed.xml
 agentp podcast add --feed-url https://example.com/feed.xml --from-feed
 agentp podcast add --feed-url https://example.com/feed.xml --from-feed --artist "Jane Doe" --overwrite-file-name true
@@ -350,7 +353,7 @@ When `overwrite_tags` is on, AgentP writes the title, album, and artist plus alb
 - **`... (internet-filter/proxy) blocked URL ...`** while downloading — the host answered with an HTML or text page instead of audio. This usually means a proxy or content filter intercepted the request, or the host rejected AgentP's `User-Agent`. Check the filter, or set `user_agent` on that podcast (`agentp podcast edit --podcast N --user-agent "..."`).
 - **`... (internet-filter/proxy) blocked URL ...`** when adding a podcast or loading its episodes — the feed request was redirected to another host that answered with a web page instead of RSS, the signature of a content filter. Ask for the feed's host to be allowed; `user_agent` applies only to audio downloads and does not change feed requests.
 - **A feed adds fine but every download fails** — some hosts (Buzzsprout's CDN, for example) refuse anonymous clients. AgentP sends `AgentP/<version>` by default; a browser-style `user_agent` on the podcast usually resolves it.
-- **`Episode index N is out of range`** — indices count up from the feed's last item, usually its oldest episode. Run `agentp podcast episodes --podcast N` to see the current numbering.
+- **`Episode index N is out of range`** — indices follow the feed's item order, counting up from its last item, so `1` is the oldest episode only when the feed lists newest first, as most do. Run `agentp podcast episodes --podcast N` to see the current numbering.
 - **Start over** — delete `config.json` and `podcasts.json` from the directory printed by `agentp config path`. The next launch recreates both, including the demo podcasts.
 
 ## Building from source
