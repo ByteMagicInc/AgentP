@@ -88,6 +88,12 @@ pub struct EpisodesArgs {
     pub podcast: String,
     #[arg(long, help = "Maximum number of episodes to show")]
     pub limit: Option<usize>,
+    #[arg(
+        long,
+        value_name = "QUERY",
+        help = "Show only episodes matching QUERY, as the TUI's / search does: words, dates such as 11/2/2026 or 2026-11, and since:/until:/after:/before: ranges"
+    )]
+    pub search: Option<String>,
 }
 
 #[derive(Args)]

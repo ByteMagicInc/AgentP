@@ -2,9 +2,9 @@ use anyhow::{Result, bail};
 use tokio::sync::mpsc;
 
 use crate::podcast::{
-    Config, DownloadEvent, Podcast, config_dir, config_path, download_selected_episodes,
-    fetch_episode_list, fetch_feed_metadata, get_last_podcast_name, load_config, sanitize_filename,
-    save_config,
+    Config, DownloadEvent, EpisodeInfo, EpisodeQuery, Podcast, SearchEntry, config_dir,
+    config_path, download_selected_episodes, fetch_episode_list, fetch_feed_metadata,
+    get_last_podcast_name, load_config, sanitize_filename, save_config,
 };
 
 use super::args::*;
@@ -144,6 +144,26 @@ async fn podcast_show(args: ShowPodcastArgs) -> Result<()> {
     Ok(())
 }
 
+/// The episodes `search` matches, in feed order; every episode when there is
+/// no search. A range term that is not a date is an error here, where the TUI
+/// would only hint, because a script cannot see the hint.
+fn search_episodes<'a>(
+    episodes: &'a [EpisodeInfo],
+    search: Option<&str>,
+) -> Result<Vec<&'a EpisodeInfo>> {
+    let Some(search) = search else {
+        return Ok(episodes.iter().collect());
+    };
+    let query = EpisodeQuery::parse(search);
+    if let Some(notice) = query.notice() {
+        bail!("Invalid --search: {notice}");
+    }
+    Ok(episodes
+        .iter()
+        .filter(|episode| query.matches(&SearchEntry::new(episode)))
+        .collect())
+}
+
 async fn podcast_episodes(args: EpisodesArgs) -> Result<()> {
     let (config, _) = load_config()?;
     let idx = resolve_podcast(&config, &args.podcast)?;
@@ -153,14 +173,26 @@ async fn podcast_episodes(args: EpisodesArgs) -> Result<()> {
         println!("No episodes found for \"{}\".", podcast.name);
         return Ok(());
     }
-    let show: &[_] = if let Some(n) = args.limit {
-        &episodes[..n.min(episodes.len())]
-    } else {
-        &episodes
+    let matching = search_episodes(&episodes, args.search.as_deref())?;
+    if matching.is_empty() {
+        println!(
+            "No episodes of \"{}\" match \"{}\".",
+            podcast.name,
+            args.search.as_deref().unwrap_or_default()
+        );
+        return Ok(());
+    }
+    let show = &matching[..args.limit.unwrap_or(matching.len()).min(matching.len())];
+    let counted = match &args.search {
+        Some(query) => format!(
+            "{} of {} episodes match \"{query}\"",
+            matching.len(),
+            episodes.len()
+        ),
+        None => format!("{} episodes", episodes.len()),
     };
     println!(
-        "{} episodes for \"{}\"{}:",
-        episodes.len(),
+        "{counted} for \"{}\"{}:",
         podcast.name,
         if args.limit.is_some() {
             format!(" (showing {})", show.len())
@@ -469,5 +501,52 @@ fn run_open(command: OpenCommand) -> Result<()> {
             open::that(&folder)?;
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn episode(title: &str, feed_index: usize, date: &str) -> EpisodeInfo {
+        EpisodeInfo {
+            title: title.to_string(),
+            feed_index,
+            pub_date: Some(date.to_string()),
+            description: String::new(),
+        }
+    }
+
+    fn titles(found: &[&EpisodeInfo]) -> Vec<String> {
+        found.iter().map(|episode| episode.title.clone()).collect()
+    }
+
+    #[test]
+    fn search_uses_the_same_grammar_as_the_tui() {
+        let episodes = vec![
+            episode("Copilot deep dive", 3, "Mon, 02 Nov 2026 09:00:00 +0000"),
+            episode("Copilot intro", 2, "Fri, 02 Jan 2026 09:00:00 +0000"),
+            episode("Gardening", 1, "Fri, 02 Jan 2026 09:00:00 +0000"),
+        ];
+        assert_eq!(search_episodes(&episodes, None).unwrap().len(), 3);
+        assert_eq!(
+            titles(&search_episodes(&episodes, Some("copilot")).unwrap()),
+            vec!["Copilot deep dive", "Copilot intro"]
+        );
+        assert_eq!(
+            titles(&search_episodes(&episodes, Some("11/2/2026")).unwrap()),
+            vec!["Copilot deep dive"]
+        );
+        assert_eq!(
+            titles(&search_episodes(&episodes, Some("copilot before:2026-06")).unwrap()),
+            vec!["Copilot intro"]
+        );
+    }
+
+    #[test]
+    fn an_unfinished_range_is_an_error_for_scripts() {
+        let episodes = vec![episode("A", 1, "Fri, 02 Jan 2026 09:00:00 +0000")];
+        let error = search_episodes(&episodes, Some("since:soon")).unwrap_err();
+        assert!(error.to_string().contains("since: needs a date"), "{error}");
     }
 }
