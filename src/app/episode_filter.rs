@@ -24,6 +24,7 @@ impl App {
         self.episode_query.clear();
         self.episode_query_before.clear();
         self.episode_search_notice = None;
+        self.episode_highlights.clear();
         self.episode_prompt = None;
         self.episode_jump_buffer.clear();
         self.episode_jump_error = None;
@@ -49,6 +50,7 @@ impl App {
         let current = self.current_episode_index();
         let query = EpisodeQuery::parse(&self.episode_query);
         self.episode_search_notice = query.notice().map(str::to_string);
+        self.episode_highlights = query.highlights().to_vec();
         self.episode_visible = self
             .episode_search_index
             .iter()

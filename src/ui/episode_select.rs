@@ -1,6 +1,7 @@
 //! Renders the episode selection screen with checkboxes and sorting.
 
 use std::borrow::Cow;
+use std::ops::Range;
 
 use ratatui::{
     Frame,
@@ -182,15 +183,20 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
 
                 let number = format!("{:>width$} ", ep.feed_index, width = number_digits);
 
-                ListItem::new(Line::from(vec![
+                let mut spans = vec![
                     Span::styled(checkbox, check_style),
                     Span::styled(number, Style::default().fg(TEXT_DIM)),
-                    Span::styled(row.title, title_style),
-                    Span::styled(
-                        row.date,
-                        Style::default().fg(TEXT_DIM).add_modifier(Modifier::ITALIC),
-                    ),
-                ]))
+                ];
+                spans.extend(highlighted(
+                    &row.title,
+                    &app.episode_highlights,
+                    title_style,
+                ));
+                spans.push(Span::styled(
+                    row.date,
+                    Style::default().fg(TEXT_DIM).add_modifier(Modifier::ITALIC),
+                ));
+                ListItem::new(Line::from(spans))
             })
             .collect();
 
@@ -245,6 +251,58 @@ pub(super) fn draw_episode_select(frame: &mut Frame, app: &mut App) {
     frame.render_widget(status, chunks[3]);
 }
 
+/// Byte ranges of `text` where any of the lowercased `terms` appear, ignoring
+/// case, sorted and merged. Empty when lowercasing would move byte offsets
+/// (as for `İ`), since the ranges are found in the lowercased copy.
+fn match_ranges(text: &str, terms: &[String]) -> Vec<Range<usize>> {
+    if terms.is_empty()
+        || text
+            .chars()
+            .any(|c| c.to_lowercase().map(char::len_utf8).sum::<usize>() != c.len_utf8())
+    {
+        return Vec::new();
+    }
+    let lower = text.to_lowercase();
+    let mut ranges: Vec<Range<usize>> = terms
+        .iter()
+        .filter(|term| !term.is_empty())
+        .flat_map(|term| {
+            lower
+                .match_indices(term.as_str())
+                .map(|(start, found)| start..start + found.len())
+        })
+        .collect();
+    ranges.sort_by_key(|range| range.start);
+    let mut merged: Vec<Range<usize>> = Vec::new();
+    for range in ranges {
+        match merged.last_mut() {
+            Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+            _ => merged.push(range),
+        }
+    }
+    merged
+}
+
+/// `title` as spans in `style`, with the search's words and phrases underlined
+/// in an accent colour. The underline is what survives the selected row's
+/// colours.
+fn highlighted(title: &str, terms: &[String], style: Style) -> Vec<Span<'static>> {
+    let hit = style.fg(ORANGE).add_modifier(Modifier::UNDERLINED);
+    let mut spans = Vec::new();
+    let mut at = 0;
+    for range in match_ranges(title, terms) {
+        if range.start > at {
+            spans.push(Span::styled(title[at..range.start].to_string(), style));
+        }
+        spans.push(Span::styled(title[range.clone()].to_string(), hit));
+        at = range.end;
+    }
+    if at < title.len() || spans.is_empty() {
+        spans.push(Span::styled(title[at..].to_string(), style));
+    }
+    spans
+}
+
 /// The tail of `text` that fits in `width` columns, led by '…' when cut, so the
 /// end of a long query, where the user is typing, stays in view.
 fn fit_tail(text: &str, width: usize) -> String {
@@ -282,8 +340,7 @@ fn episode_bar(app: &App, width: usize) -> Option<Line<'static>> {
             let (detail, detail_style) = match &app.episode_search_notice {
                 Some(notice) => (format!(" · {notice}"), Style::default().fg(ERROR_FG)),
                 None => (
-                    " · title, description, date; since:/until:/after:/before: for a range"
-                        .to_string(),
+                    " · words, \"phrases\", -exclude, 11/2/2026, #500, since:30d".to_string(),
                     dim,
                 ),
             };
@@ -655,5 +712,64 @@ mod tests {
         let text = screen_text(&mut app);
         assert!(text.contains("after: needs a date"), "{text}");
         assert!(text.contains("3 of 3 episodes"), "{text}");
+    }
+
+    fn underlined_text(buffer: &Buffer, y: u16) -> String {
+        (0..buffer.area.width)
+            .filter(|&x| buffer[(x, y)].modifier.contains(Modifier::UNDERLINED))
+            .map(|x| buffer[(x, y)].symbol())
+            .collect()
+    }
+
+    #[test]
+    fn search_words_are_underlined_in_titles_even_on_the_cursor_row() {
+        let mut app = episode_app(&[
+            (
+                "Revisiting GitHub Copilot",
+                "Wed, 10 Sep 2025 06:00:00 +0000",
+            ),
+            ("Your AI Code Copilot", "Wed, 10 Sep 2025 06:00:00 +0000"),
+        ]);
+        app.episode_search_open();
+        app.episode_query = "copilot -zebra 9/10".to_string();
+        app.episode_prompt_edited();
+        let buffer = draw(&mut app, 90, 14);
+        let rows = buffer_rows(&buffer);
+        let row_of = |text: &str| rows.iter().position(|row| row.contains(text)).unwrap() as u16;
+        assert_eq!(app.episode_list_state.selected(), Some(0));
+        assert_eq!(underlined_text(&buffer, row_of("Revisiting")), "Copilot");
+        assert_eq!(underlined_text(&buffer, row_of("Your AI")), "Copilot");
+
+        app.episode_query = "\"github c\"".to_string();
+        app.episode_prompt_edited();
+        let buffer = draw(&mut app, 90, 14);
+        let rows = buffer_rows(&buffer);
+        let first = rows
+            .iter()
+            .position(|row| row.contains("Revisiting"))
+            .unwrap() as u16;
+        assert_eq!(underlined_text(&buffer, first), "GitHub C");
+        assert!(!rows.iter().any(|row| row.contains("Your AI")));
+    }
+
+    #[test]
+    fn titles_are_not_underlined_without_a_search() {
+        let mut app = numbered_app();
+        let buffer = draw(&mut app, 90, 14);
+        for y in 0..buffer.area.height {
+            assert_eq!(underlined_text(&buffer, y), "");
+        }
+    }
+
+    #[test]
+    fn match_ranges_merge_overlaps_and_skip_offset_shifting_text() {
+        let terms = vec!["git".to_string(), "github".to_string(), "hub c".to_string()];
+        assert_eq!(match_ranges("GitHub Copilot", &terms), vec![0..8]);
+        assert!(match_ranges("İstanbul GitHub", &terms).is_empty());
+        assert_eq!(
+            highlighted("İstanbul GitHub", &terms, Style::default()).len(),
+            1
+        );
+        assert_eq!(match_ranges("Café GitHub", &terms), vec![6..12]);
     }
 }

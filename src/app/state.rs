@@ -184,6 +184,8 @@ pub struct App {
     pub episode_query_before: String,
     /// A hint about an unfinished range term in the query, shown in the search bar.
     pub episode_search_notice: Option<String>,
+    /// The search's words and phrases, lowercased, marked where they appear in titles.
+    pub episode_highlights: Vec<String>,
     pub episode_prompt: Option<EpisodePrompt>,
     pub episode_jump_buffer: String,
     pub episode_jump_error: Option<String>,
@@ -243,6 +245,7 @@ impl App {
             episode_query: String::new(),
             episode_query_before: String::new(),
             episode_search_notice: None,
+            episode_highlights: Vec::new(),
             episode_prompt: None,
             episode_jump_buffer: String::new(),
             episode_jump_error: None,
