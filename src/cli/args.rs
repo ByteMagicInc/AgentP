@@ -91,7 +91,7 @@ pub struct EpisodesArgs {
     #[arg(
         long,
         value_name = "QUERY",
-        help = "Show only episodes matching QUERY, as the TUI's / search does: words, dates such as 11/2/2026 or 2026-11, and since:/until:/after:/before: ranges"
+        help = "Show only episodes matching QUERY, as the TUI's / search does: words, \"phrases\", -exclusions, dates such as 11/2/2026, #500 episode numbers, and since:/until:/after:/before: ranges such as since:30d"
     )]
     pub search: Option<String>,
 }

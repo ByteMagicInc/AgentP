@@ -544,6 +544,27 @@ mod tests {
     }
 
     #[test]
+    fn phrases_exclusions_and_numbers_reach_the_cli() {
+        let episodes = vec![
+            episode(
+                "GitHub Copilot deep dive",
+                3,
+                "Mon, 02 Nov 2026 09:00:00 +0000",
+            ),
+            episode("Copilot on GitHub", 2, "Fri, 02 Jan 2026 09:00:00 +0000"),
+            episode("GitHub Copilot intro", 1, "Fri, 02 Jan 2026 09:00:00 +0000"),
+        ];
+        assert_eq!(
+            titles(&search_episodes(&episodes, Some("\"github copilot\" -intro")).unwrap()),
+            vec!["GitHub Copilot deep dive"]
+        );
+        assert_eq!(
+            titles(&search_episodes(&episodes, Some("#1-2 -\"on github\"")).unwrap()),
+            vec!["GitHub Copilot intro"]
+        );
+    }
+
+    #[test]
     fn an_unfinished_range_is_an_error_for_scripts() {
         let episodes = vec![episode("A", 1, "Fri, 02 Jan 2026 09:00:00 +0000")];
         let error = search_episodes(&episodes, Some("since:soon")).unwrap_err();
