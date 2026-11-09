@@ -77,7 +77,7 @@ Podcast selectors accept either a 1-based index or a case-insensitive name. A su
 ### Search episodes and jump to one by number
 
 <p align="center">
-  <img src="docs/assets/search-and-jump.gif" alt="Searching Merge Conflict's episodes for copilot, selecting a match, clearing the filter, jumping to episode 500, and finding both actions in the command palette" width="1572">
+  <img src="docs/assets/search-and-jump.gif" alt="Searching Merge Conflict's episodes for copilot since 2025, selecting a match, clearing the filter, jumping to episode 500, and finding both actions in the command palette" width="1572">
 </p>
 
 ### Add a podcast from its RSS feed
@@ -149,7 +149,7 @@ Deleting is the one confirmation that does not take `Enter`. `Enter` opens a pod
 | `Space` | Toggle episode |
 | `a` | Toggle all (only the episodes a search leaves showing) |
 | `s` | Sort (newest/oldest) |
-| `/` | Search episodes by title, description, or date |
+| `/` | Search episodes by title, description, date, or date range |
 | `#` or any digit | Go to an episode by its number |
 | `o` | Open podcast folder |
 | `Enter` | Download selected |
@@ -157,9 +157,22 @@ Deleting is the one confirmation that does not take `Enter`. `Enter` opens a pod
 
 Every row starts with its episode number, the same numbering `--episodes` uses: numbers count up from the feed's last item, so in a feed that lists newest first, `1` is the oldest episode and the highest number is the newest.
 
-**Search.** Press `/` and type; the list narrows as you type. Several words must all match, in any order, somewhere in the title, description, or publish date, ignoring case. A date matches as the list shows it (`Sep 10, 2025`), month first with dashes or slashes and with or without leading zeros (`09-10-2025`, `9/10/2025`), or as ISO (`2025-09-10`). `Enter` keeps the filter and returns to the list; `Esc` clears it. Selections are kept while the list is narrowed, and `Download` fetches every selected episode, including any the search is currently hiding.
+**Search.** Press `/` and type; the list narrows as you type. Several terms must all match, in any order, ignoring case:
 
-**Go to a number.** Type a number such as `128` (or press `#` first) and press `Enter`. If a search is hiding that episode, the search is cleared. A number the feed does not have leaves the prompt open with a message.
+| Term | Matches | Examples |
+|---|---|---|
+| A word | The title, the description, or the date as the list shows it, including the full month name | `copilot`, `sep`, `september`, `2025` |
+| A date | Episodes published that day, month first, with dashes or slashes and with or without leading zeros | `11/2/2026`, `11-02-2026`, `2026-11-02` |
+| A month | Episodes published that month | `11/2026`, `2026-11` |
+| A month and day | That day in any year | `9/10` |
+| `since:` / `until:` | On or after / on or before a date, month, or year | `since:2026-01`, `until:2025` |
+| `after:` / `before:` | Strictly after / before a date, month, or year | `after:9/10/2025`, `before:2026` |
+
+A date written in a title, such as `9/11`, still matches that title. While a range term is unfinished, such as `after:20`, it is left out and the search bar says what it needs. An episode whose feed date AgentP cannot read shows no date in the list; its words still match the date as the feed wrote it, but it never falls inside a range.
+
+`Enter` keeps the filter and returns to the list; `Esc` puts back the filter the search opened with. On the list, `Esc` clears an active filter. Pasting into the search turns line breaks into spaces. Selections are kept while the list is narrowed, and `Download` fetches every selected episode, including any the search is currently hiding.
+
+**Go to a number.** Type a number such as `128` (or press `#` first) and press `Enter`. If a search is hiding that episode, the search is cleared. A number the feed does not have leaves the prompt open with a message. A pasted number may start with `#`; anything else that is not a plain number, such as `-2`, is reported rather than changed.
 
 <details>
 <summary>Keys for the command palette, download screen, config menu, wizard, and editor</summary>
@@ -237,6 +250,7 @@ agentp podcast list
 agentp podcast list --no-fetch
 agentp podcast show --podcast "Darknet Diaries"
 agentp podcast episodes --podcast 1 --limit 20
+agentp podcast episodes --podcast 1 --search "copilot since:2026-01"
 agentp podcast add --name "My Show" --feed-url https://example.com/feed.xml
 agentp podcast add --feed-url https://example.com/feed.xml --from-feed
 agentp podcast add --feed-url https://example.com/feed.xml --from-feed --artist "Jane Doe" --overwrite-file-name true
@@ -244,6 +258,8 @@ agentp podcast edit --podcast 2 --name "New Name" --feed-url https://example.com
 agentp podcast edit --podcast 2 --remove-images true
 agentp podcast delete --podcast "Old Show"
 ```
+
+`podcast episodes --search` takes the same terms as the episode-list search described above, and `--limit` then caps the matches. A range term that is not a date, such as `since:soon`, is an error.
 
 New podcasts start from the `default_podcast` template in `config.json`. `--from-feed` fills in the name, album, and artist from the channel metadata; `--name` still wins if you pass both. Every per-podcast option in the [table below](#per-podcast-options-podcastsjson) is also a flag on `podcast add` and `podcast edit`, and yes/no flags take an explicit `true` or `false`.
 

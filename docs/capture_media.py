@@ -20,7 +20,7 @@ pyte interprets its terminal output and Pillow renders the cells into a framed
 terminal image. Screen assertions reject unexpected states before capture.
 Pauses sample live output to preserve animation, then frames become looping GIFs.
 
-The walkthroughs browse and select episodes, search Merge Conflict's episodes
+The walkthroughs browse and select episodes, search Merge Conflict's episodes by word and date range
 and jump to one by number, filter the command palette and visit configuration, and
 prepopulate The Pragmatic Engineer from its RSS feed after a URL that is not a
 feed shows why Prepopulate failed. They never download audio or edit the
@@ -412,8 +412,16 @@ def search():
             t.send(bytes([ch]))
             t.capture(200)
         t.capture(1800, expected=("Search: copilot_", "episodes"))
+        for ch in b" since:2":
+            t.send(bytes([ch]))
+            t.capture(200)
+        t.capture(1600, expected=("since: needs a date",))
+        for ch in b"025":
+            t.send(bytes([ch]))
+            t.capture(250)
+        t.capture(2000, expected=("Search: copilot since:2025_", "episodes"))
         t.send(b"\r")
-        t.capture(1000, expected=("Filter:", "copilot"))
+        t.capture(1000, expected=("Filter:", "copilot since:2025"))
         t.send(b"j ")
         t.capture(1400, expected=("[x]", "Filter:"))
         t.send(b"\x1b")
