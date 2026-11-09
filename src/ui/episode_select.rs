@@ -22,6 +22,9 @@ use super::widgets::*;
 const MIN_TITLE_WIDTH: usize = 12;
 const CHECKBOX_WIDTH: usize = 5;
 const HIGHLIGHT_SYMBOL: &str = "  > ";
+/// The narrowest room worth showing a prompt's message in; below it the
+/// message is left out rather than cut to a stub.
+const MIN_BAR_MESSAGE: usize = 12;
 
 /// The two text spans of one episode row.
 struct EpisodeRow<'a> {
@@ -276,18 +279,29 @@ fn episode_bar(app: &App, width: usize) -> Option<Line<'static>> {
         Some(EpisodePrompt::Search) => {
             let prefix = " Search: ";
             let count = format!("   {shown} of {total} episodes");
-            let full = format!("{count} · title, description, date");
-            let room = |suffix: &str| width.saturating_sub(prefix.width() + 1 + suffix.width());
-            let suffix = if app.episode_query.width() <= room(&full) {
-                full
-            } else {
-                count
+            let (detail, detail_style) = match &app.episode_search_notice {
+                Some(notice) => (format!(" · {notice}"), Style::default().fg(ERROR_FG)),
+                None => (
+                    " · title, description, date; since:/until:/after:/before: for a range"
+                        .to_string(),
+                    dim,
+                ),
             };
-            let query = fit_tail(&app.episode_query, room(&suffix));
+            let room = width.saturating_sub(prefix.width() + 1 + count.width());
+            let query = fit_tail(&app.episode_query, room);
+            let left = room.saturating_sub(query.width());
+            let detail = if app.episode_search_notice.is_some() && left >= MIN_BAR_MESSAGE {
+                truncate_ellipsis(&detail, left).into_owned()
+            } else if detail.width() <= left {
+                detail
+            } else {
+                String::new()
+            };
             Some(Line::from(vec![
                 Span::styled(prefix, Style::default().fg(ORANGE).bold()),
                 Span::styled(format!("{query}_"), Style::default().fg(HIGHLIGHT)),
-                Span::styled(suffix, dim),
+                Span::styled(count, dim),
+                Span::styled(detail, detail_style),
             ]))
         }
         Some(EpisodePrompt::Jump) => {
@@ -297,24 +311,26 @@ fn episode_bar(app: &App, width: usize) -> Option<Line<'static>> {
                 .map(|episode| episode.feed_index)
                 .max()
                 .unwrap_or(0);
-            let mut spans = vec![
-                Span::styled(" Go to episode #: ", Style::default().fg(ORANGE).bold()),
-                Span::styled(
-                    format!("{}_", app.episode_jump_buffer),
-                    Style::default().fg(HIGHLIGHT),
-                ),
-            ];
-            match &app.episode_jump_error {
-                Some(error) => spans.push(Span::styled(
-                    format!("   {error}"),
-                    Style::default().fg(ERROR_FG),
-                )),
-                None => spans.push(Span::styled(
-                    format!("   1 = oldest, {newest} = newest"),
-                    dim,
-                )),
-            }
-            Some(Line::from(spans))
+            let prefix = " Go to episode #: ";
+            let number = fit_tail(
+                &app.episode_jump_buffer,
+                width.saturating_sub(prefix.width() + 1),
+            );
+            let left = width.saturating_sub(prefix.width() + number.width() + 1);
+            let (message, style) = match &app.episode_jump_error {
+                Some(error) => (format!("   {error}"), Style::default().fg(ERROR_FG)),
+                None => (format!("   1 = oldest, {newest} = newest"), dim),
+            };
+            let message = if left >= MIN_BAR_MESSAGE {
+                truncate_ellipsis(&message, left).into_owned()
+            } else {
+                String::new()
+            };
+            Some(Line::from(vec![
+                Span::styled(prefix, Style::default().fg(ORANGE).bold()),
+                Span::styled(format!("{number}_"), Style::default().fg(HIGHLIGHT)),
+                Span::styled(message, style),
+            ]))
         }
         None if app.episode_filter_active() => {
             let prefix = " Filter: ";
@@ -536,6 +552,7 @@ mod tests {
             episode.feed_index = i + 1;
         }
         app.episodes[1].description = "mentions a Zebra".to_string();
+        app.reset_episode_view();
         app
     }
 
@@ -614,5 +631,29 @@ mod tests {
         app.episode_jump_commit();
         let text = screen_text(&mut app);
         assert!(text.contains("No episode #4"), "{text}");
+    }
+
+    #[test]
+    fn a_narrow_go_to_bar_keeps_the_number_and_cuts_the_message() {
+        let mut app = numbered_app();
+        app.episode_jump_open(Some('9'));
+        app.episode_jump_buffer.push_str("87654321");
+        app.episode_jump_commit();
+        let rows = buffer_rows(&draw(&mut app, 44, 14));
+        let bar = rows.iter().find(|row| row.contains("Go to")).unwrap();
+        assert!(bar.contains("987654321_"), "{bar}");
+        assert!(bar.contains("No episode") && bar.contains('…'), "{bar}");
+        assert!(bar.trim_end().width() <= 44, "{bar}");
+    }
+
+    #[test]
+    fn an_unfinished_range_is_explained_in_the_search_bar() {
+        let mut app = numbered_app();
+        app.episode_search_open();
+        app.episode_query = "after:20".to_string();
+        app.episode_prompt_edited();
+        let text = screen_text(&mut app);
+        assert!(text.contains("after: needs a date"), "{text}");
+        assert!(text.contains("3 of 3 episodes"), "{text}");
     }
 }

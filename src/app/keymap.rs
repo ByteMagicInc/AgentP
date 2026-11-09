@@ -671,7 +671,7 @@ static SEARCH_DONE: Binding = Binding {
 
 static SEARCH_CANCEL: Binding = Binding {
     display: None,
-    label: Some(HintLabel::Static("Clear")),
+    label: Some(HintLabel::Static("Cancel")),
     keys: &[(Key::plain(KeyCode::Esc), Action::EpisodeSearchCancel)],
     enabled: None,
     hint_when: None,
@@ -1537,7 +1537,7 @@ mod tests {
                 ("↑/↓", "Navigate"),
                 ("Ctrl+V", "Paste"),
                 ("Enter", "Keep filter"),
-                ("Esc", "Clear"),
+                ("Esc", "Cancel"),
             ],
         );
         for typed in ['q', 'j', ' ', '?', '/', '5'] {

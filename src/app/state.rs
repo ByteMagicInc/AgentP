@@ -6,7 +6,7 @@ use crossterm::event::KeyCode;
 use ratatui::widgets::ListState;
 
 use super::episode_filter::EpisodePrompt;
-use crate::podcast::{Config, DownloadEvent, EpisodeInfo, Podcast};
+use crate::podcast::{Config, DownloadEvent, EpisodeInfo, Podcast, SearchEntry};
 
 use super::add_podcast_wizard::AddPodcastState;
 use super::commands::{COMMANDS, CommandPaletteState, palette_command_visible};
@@ -177,7 +177,13 @@ pub struct App {
     pub episode_list_state: ListState,
     /// Indices into `episodes` that the search leaves showing, in list order.
     pub episode_visible: Vec<usize>,
+    /// Each episode's searchable text, kept in the same order as `episodes`.
+    pub episode_search_index: Vec<SearchEntry>,
     pub episode_query: String,
+    /// The query as it stood when the search prompt opened, restored by `Esc`.
+    pub episode_query_before: String,
+    /// A hint about an unfinished range term in the query, shown in the search bar.
+    pub episode_search_notice: Option<String>,
     pub episode_prompt: Option<EpisodePrompt>,
     pub episode_jump_buffer: String,
     pub episode_jump_error: Option<String>,
@@ -233,7 +239,10 @@ impl App {
             episode_selected: Vec::new(),
             episode_list_state: ListState::default(),
             episode_visible: Vec::new(),
+            episode_search_index: Vec::new(),
             episode_query: String::new(),
+            episode_query_before: String::new(),
+            episode_search_notice: None,
             episode_prompt: None,
             episode_jump_buffer: String::new(),
             episode_jump_error: None,
@@ -372,14 +381,23 @@ impl App {
         self.loading_episodes = false;
     }
 
-    /// Reverse the episode list sort order.
+    /// Reverse the episode list sort order, keeping the cursor on its episode.
     pub fn toggle_sort_order(&mut self) {
         self.sort_order = self.sort_order.toggle();
+        let current = self.current_episode_index();
+        let last = self.episodes.len().saturating_sub(1);
         self.episodes.reverse();
         self.episode_selected.reverse();
+        self.episode_search_index.reverse();
+        self.episode_list_state.select(None);
         self.refresh_episode_visible();
-        if !self.episode_visible.is_empty() {
-            self.episode_list_state.select(Some(0));
+        let position = current.and_then(|index| {
+            self.episode_visible
+                .iter()
+                .position(|&shown| shown == last - index)
+        });
+        if position.is_some() {
+            self.episode_list_state.select(position);
         }
     }
 
