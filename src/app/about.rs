@@ -1,3 +1,6 @@
+//! About screen state: version and build info, the issue link, and copying the
+//! version to the clipboard.
+
 use std::env::consts::{ARCH, OS};
 
 use super::state::{App, Screen};

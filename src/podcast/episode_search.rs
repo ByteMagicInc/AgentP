@@ -157,7 +157,8 @@ enum Matcher {
     /// A word or a quoted phrase, found anywhere in the title, the description
     /// or the shown date.
     Text(String),
-    /// A date, month or month-and-day; also found when written in the text.
+    /// A date, month or month-and-day, matched by calendar date and also as
+    /// literal text, so `9/11` still finds a title that says it. Keep both paths.
     Date { period: DatePeriod, literal: String },
     /// `#500` or `#100-120`: the episode number, inclusive.
     Number { low: usize, high: usize },
