@@ -16,6 +16,23 @@ use crate::app::{App, hint_bar_toggle_key, hints};
 
 use super::theme::*;
 
+/// The inline warning shown beside Convert To MP3 while it is on and the last
+/// `ffmpeg` check found none; saving is never blocked.
+pub(super) fn convert_to_mp3_warning(
+    p: &crate::podcast::Podcast,
+    field: usize,
+) -> Option<Span<'static>> {
+    let missing = crate::podcast::ffmpeg::status() == crate::podcast::ffmpeg::FfmpegStatus::Missing;
+    if field == crate::app::PODCAST_FIELD_CONVERT_TO_MP3 && p.convert_to_mp3 && missing {
+        Some(Span::styled(
+            "  ffmpeg not found on PATH — episodes stay in their original format",
+            Style::default().fg(ORANGE),
+        ))
+    } else {
+        None
+    }
+}
+
 /// Display width of every non-empty `format_date` result.
 pub(super) const DATE_COLUMN_WIDTH: usize = 12;
 /// Blank columns kept between a row's text and its date column.

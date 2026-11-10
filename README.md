@@ -2,7 +2,7 @@
 
 <p align="center"><strong>A fast, polished podcast downloader for your terminal.</strong></p>
 
-<p align="center">Browse feeds, select episodes, and write clean ID3 tags from an interactive TUI—or automate everything with the CLI.</p>
+<p align="center">Browse feeds, select episodes, and write clean tags (ID3 for MP3, MP4 metadata for M4A) from an interactive TUI—or automate everything with the CLI.</p>
 
 <p align="center">
   <a href="https://github.com/ByteMagicInc/AgentP/actions/workflows/release.yml"><img src="https://github.com/ByteMagicInc/AgentP/actions/workflows/release.yml/badge.svg" alt="Release status"></a>
@@ -43,6 +43,8 @@
 
 > [!TIP]
 > Alpine and other minimal Linux distributions can use the fully static `x86_64-unknown-linux-musl` build.
+
+Installing [ffmpeg](https://ffmpeg.org/download.html) is recommended but optional (`brew install ffmpeg`, `scoop install ffmpeg`, or your distribution's package). AgentP needs it only for **Convert To MP3**, an off-by-default setting that re-encodes episodes a feed serves as M4A or other non-MP3 audio. Homebrew and Scoop mention ffmpeg after installing AgentP but do not install it. Without ffmpeg, everything else works and those episodes keep their original format.
 
 ## Quick start
 
@@ -313,13 +315,14 @@ Each entry in `podcasts.json` has the same shape as `default_podcast` plus its i
 | `album_name` | `--album-name` | Subfolder name and album tag; falls back to `name` when empty |
 | `artist` | `--artist` | Artist and album-artist tag |
 | `user_agent` | `--user-agent` | Custom `User-Agent` for this podcast's audio downloads; empty uses AgentP's default |
-| `overwrite_tags` | `--overwrite-tags` | Master switch for writing ID3 text tags |
-| `remove_existing_tags` | `--remove-existing-tags` | Drop the source file's ID3 tag and write a fresh minimal one (only when `overwrite_tags` is on) |
+| `overwrite_tags` | `--overwrite-tags` | Master switch for writing text tags: ID3 on MP3, MP4 metadata on M4A |
+| `remove_existing_tags` | `--remove-existing-tags` | Drop the source file's existing tag (ID3 or MP4 metadata) and write a fresh minimal one (only when `overwrite_tags` is on) |
 | `remove_images` | `--remove-images` | Strip embedded cover art; works even when `overwrite_tags` is off |
 | `overwrite_album_name` | `--overwrite-album-name` | Write the album tag |
 | `overwrite_artist` | `--overwrite-artist` | Write the artist and album-artist tags |
 | `overwrite_title` | `--overwrite-title` | Write the title tag |
 | `overwrite_file_name` | `--overwrite-file-name` | Rename the file to the episode title |
+| `convert_to_mp3` | `--convert-to-mp3` | Re-encode episodes served as M4A, AAC, Ogg, FLAC, or WAV to MP3 with ffmpeg; off by default, which keeps the feed's original format. Needs ffmpeg on `PATH`, and the re-encode is lossy |
 | `append_number_to_title` | `--append-number-to-title` | Prefix the title tag with the episode number |
 | `leading_zeros_amount` | `--leading-zeros-amount` | Zero-padding for that number; `3` pads to four digits (`0001`), `0` disables |
 
@@ -337,13 +340,19 @@ Downloads are organized by album name, which falls back to the podcast name when
 ```text
 <download_dir>/
 └── <album_name>/
-    ├── <episode>.mp3
-    └── <episode>.mp3
+    ├── <first episode>.mp3
+    └── <second episode>.mp3
 ```
 
-Without `overwrite_file_name`, the filename is the last path segment of the episode's enclosure URL (hosts that wrap the real file URL inside a redirect link, such as Anchor, are unwrapped), falling back to the final response URL and then `default.mp3`. With it, the file is renamed to `<sanitized episode title>.mp3`. Downloading an episode again overwrites the existing file.
+By default an episode keeps the format the feed serves, so a feed that mixes formats, as Latent Space does, gives you some `<episode>.m4a` files. Turn on `convert_to_mp3` and every episode lands as `.mp3` once its conversion succeeds. It still keeps its original format when ffmpeg is missing, when the conversion fails, or when AgentP cannot identify the file's format.
 
-When `overwrite_tags` is on, AgentP writes the title, album, and artist plus album-artist frames that you have enabled and leaves every other frame alone. Turn on `remove_existing_tags` to discard the source file's tag first, which helps when a host embeds large metadata blocks that confuse players.
+Without `overwrite_file_name`, the filename is the last path segment of the episode's enclosure URL (hosts that wrap the real file URL inside a redirect link, such as Anchor, are unwrapped), falling back to the final response URL and then `default.<ext>`. With it, the file is renamed to `<sanitized episode title>.<ext>`. Downloading an episode again overwrites the existing file.
+
+AgentP checks the first bytes of each download to find its real format rather than trusting the URL or the server's `Content-Type`. A URL's extension is kept only when it is an audio extension matching that format (`mp3` for MP3; `m4a`, `m4b`, or `mp4` for MP4 audio; `aac` for raw AAC; `ogg`, `oga`, or `opus` for Ogg; `flac`; `wav`). Otherwise `<ext>` is the format's default (`mp3`, `m4a`, `aac`, `ogg`, `flac`, or `wav`; `mp3` for an unrecognised format), and a kept URL file name with any other extension gets that default appended, so a feed cannot make AgentP save an episode as, say, an `.exe`.
+
+With `convert_to_mp3` on, AgentP saves an M4A, AAC, Ogg, FLAC, or WAV download under that name, re-encodes it with ffmpeg to the same name ending in `.mp3` (LAME VBR quality 4, about 130–165 kbps, keeping cover art and the feed's metadata; a video episode keeps only its audio), and then deletes the original. A download AgentP cannot identify as one of those formats is never handed to ffmpeg; it is saved as downloaded, with a notice. AgentP also tells ffmpeg the input format rather than letting it guess, and limits it to local files, so a feed cannot pass off a playlist as an episode to make ffmpeg fetch URLs or read other files. That narrows what an untrusted download can do but does not sandbox ffmpeg. A missing ffmpeg is reported once per download run and a failed conversion once per episode, both as warnings: the original file is kept and tagged as below, and `agentp download` still exits successfully. Turning the setting on in the TUI shows a warning beside it while ffmpeg is missing, and `podcast add` and `podcast edit` print one; neither stops you saving. `agentp config show` reports whether ffmpeg was found. Conversion takes several seconds per episode; stopping AgentP mid-conversion can leave a `<episode>.mp3.part` file beside the original, which the next download of that episode replaces.
+
+When `overwrite_tags` is on, AgentP writes the title, album, and artist plus album-artist tags that you have enabled and leaves every other tag alone. MP3 files, converted ones included, get ID3 frames. With `convert_to_mp3` off, or when conversion could not run, M4A files get MP4 metadata atoms, and raw AAC and other formats are saved untagged, with a notice in the download log when tagging or image removal is on. Turn on `remove_existing_tags` to discard the source file's tag first, which helps when a host embeds large metadata blocks that confuse players.
 
 > [!NOTE]
 > Episode indices are **1-based, counted up from the feed's last item**, so in a feed that lists newest first, 1 is the oldest episode and the newest has the highest index. AgentP does not re-sort by publication date. This applies to `--episodes` and numeric title prefixes. With `leading_zeros_amount: 3`, episode 1 becomes `0001`, episode 10 becomes `0010`, and episode 100 becomes `0100`.
@@ -353,6 +362,7 @@ When `overwrite_tags` is on, AgentP writes the title, album, and artist plus alb
 - **`... (internet-filter/proxy) blocked URL ...`** while downloading — the host answered with an HTML or text page instead of audio. This usually means a proxy or content filter intercepted the request, or the host rejected AgentP's `User-Agent`. Check the filter, or set `user_agent` on that podcast (`agentp podcast edit --podcast N --user-agent "..."`).
 - **`... (internet-filter/proxy) blocked URL ...`** when adding a podcast or loading its episodes — the feed request was redirected to another host that answered with a web page instead of RSS, the signature of a content filter. Ask for the feed's host to be allowed; `user_agent` applies only to audio downloads and does not change feed requests.
 - **A feed adds fine but every download fails** — some hosts (Buzzsprout's CDN, for example) refuse anonymous clients. AgentP sends `AgentP/<version>` by default; a browser-style `user_agent` on the podcast usually resolves it.
+- **`ffmpeg was not found on PATH`** — **Convert To MP3** is on for that podcast but ffmpeg is not installed, so episodes keep their original format. Install ffmpeg, or turn the setting off (`agentp podcast edit --podcast N --convert-to-mp3 false`) to stop the warning.
 - **`Episode index N is out of range`** — indices follow the feed's item order, counting up from its last item, so `1` is the oldest episode only when the feed lists newest first, as most do. Run `agentp podcast episodes --podcast N` to see the current numbering.
 - **Start over** — delete `config.json` and `podcasts.json` from the directory printed by `agentp config path`. The next launch recreates both, including the demo podcasts.
 

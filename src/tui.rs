@@ -147,7 +147,26 @@ fn type_into_buffer(app: &mut App, context: KeyContext, code: KeyCode) {
     app.episode_prompt_edited();
 }
 
+/// Applies `action`, then re-checks for `ffmpeg` in the background whenever it
+/// turned Convert To MP3 on in the editor or the wizard, including by opening the
+/// wizard with a template that already has it on.
 fn apply_action(app: &mut App, action: Action, channels: &mut Channels) {
+    let was_converting = editing_convert_to_mp3(app);
+    dispatch_action(app, action, channels);
+    if !was_converting && editing_convert_to_mp3(app) {
+        podcast::ffmpeg::refresh_in_background();
+    }
+}
+
+fn editing_convert_to_mp3(app: &App) -> bool {
+    match app.screen {
+        Screen::EditPodcast => app.podcast_editor.working_copy.convert_to_mp3,
+        Screen::AddPodcast => app.add_podcast.podcast.convert_to_mp3,
+        _ => false,
+    }
+}
+
+fn dispatch_action(app: &mut App, action: Action, channels: &mut Channels) {
     match action {
         Action::ForceQuit => app.request_force_quit(),
         Action::Quit => app.request_quit(),
@@ -406,6 +425,7 @@ pub async fn run(config: podcast::Config, config_notice: Option<String>) -> Resu
     }));
 
     let mut app = App::new(config, config_notice);
+    podcast::ffmpeg::refresh_in_background();
 
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
