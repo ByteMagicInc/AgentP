@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-10
+
 ### Added
 
 - **An agent skill** for coding agents such as Claude Code and Codex: it finds a podcast's feed, adds the podcast or downloads from it once, finds an episode by topic, date or number, and downloads it. Install it with `npx skills add ByteMagicInc/AgentP --skill agentp -g`, or save the copy that matches your version with `agentp skill`.
