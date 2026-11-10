@@ -261,6 +261,14 @@ jobs:
               bin.install "agentp"
             end
 
+            def caveats
+              <<~CAVEATS
+                AgentP can convert M4A, AAC, Ogg, FLAC and WAV episodes to MP3 with the
+                optional Convert To MP3 setting. That needs ffmpeg:
+                  brew install ffmpeg
+              CAVEATS
+            end
+
             test do
               system "#{bin}/agentp", "--help"
             end
@@ -325,6 +333,9 @@ jobs:
               }
             },
             "bin": "agentp.exe",
+            "suggest": {
+              "MP3 conversion (optional Convert To MP3 setting)": "ffmpeg"
+            },
             "checkver": {
               "github": "https://github.com/ByteMagicInc/AgentP"
             },
