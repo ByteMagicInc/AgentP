@@ -157,7 +157,8 @@ enum Matcher {
     /// A word or a quoted phrase, found anywhere in the title, the description
     /// or the shown date.
     Text(String),
-    /// A date, month or month-and-day; also found when written in the text.
+    /// A date, month or month-and-day; also found when written in the text, or in the
+    /// feed's own date text when AgentP could not read that date.
     Date { period: DatePeriod, literal: String },
     /// `#500` or `#100-120`: the episode number, inclusive.
     Number { low: usize, high: usize },
@@ -167,9 +168,10 @@ impl Matcher {
     fn matches(&self, entry: &SearchEntry) -> bool {
         match self {
             Matcher::Text(text) => entry.text.contains(text) || entry.date_text.contains(text),
-            Matcher::Date { period, literal } => {
-                entry.date.is_some_and(|date| period.contains(date)) || entry.text.contains(literal)
-            }
+            Matcher::Date { period, literal } => match entry.date {
+                Some(date) => period.contains(date) || entry.text.contains(literal),
+                None => entry.text.contains(literal) || entry.date_text.contains(literal),
+            },
             Matcher::Number { low, high } => (*low..=*high).contains(&entry.feed_index),
         }
     }
@@ -555,6 +557,19 @@ mod tests {
         });
         assert!(matches("no date", &undated));
         assert!(!matches("since:2000", &undated));
+    }
+
+    #[test]
+    fn an_unreadable_feed_date_still_matches_a_date_term_as_written() {
+        let iso = SearchEntry::new(&EpisodeInfo {
+            title: "Odd date".to_string(),
+            feed_index: 1,
+            pub_date: Some("2025-09-10T06:00:00Z".to_string()),
+            description: String::new(),
+        });
+        assert!(matches("2025-09-10", &iso));
+        assert!(!matches("2025-09-11", &iso));
+        assert!(!matches("since:2025", &iso));
     }
 
     #[test]

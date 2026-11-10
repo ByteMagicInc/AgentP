@@ -91,6 +91,7 @@ pub struct EpisodesArgs {
     #[arg(
         long,
         value_name = "QUERY",
+        allow_hyphen_values = true,
         help = "Show only episodes matching QUERY, as the TUI's / search does: words, \"phrases\", -exclusions, dates such as 11/2/2026, #500 episode numbers, and since:/until:/after:/before: ranges such as since:30d"
     )]
     pub search: Option<String>,
@@ -233,4 +234,34 @@ pub struct OpenPodcastArgs {
     pub podcast: String,
     #[arg(long, help = "Create the folder if it does not exist")]
     pub create: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn search_of(args: &[&str]) -> Option<String> {
+        match Cli::try_parse_from(args).ok()?.command? {
+            Command::Podcast {
+                command: PodcastCommand::Episodes(episodes),
+            } => episodes.search,
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn search_accepts_a_query_that_starts_with_an_exclusion() {
+        let base = [
+            "agentp",
+            "podcast",
+            "episodes",
+            "--podcast",
+            "1",
+            "--search",
+        ];
+        for query in ["-intro", "-\"live show\"", "-11/2026 copilot"] {
+            let args: Vec<&str> = base.iter().copied().chain([query]).collect();
+            assert_eq!(search_of(&args).as_deref(), Some(query), "{query}");
+        }
+    }
 }
