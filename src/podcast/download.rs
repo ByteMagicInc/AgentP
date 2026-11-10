@@ -10,6 +10,7 @@ use std::time::Duration;
 use anyhow::Result;
 use id3::{Error, ErrorKind, Tag, TagLike};
 use reqwest::Url;
+use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 
 use super::data::{DownloadEvent, Podcast};
@@ -433,8 +434,8 @@ enum Conversion {
 /// after it succeeds, and `source` is removed only after that, so every failure leaves
 /// the original download on disk. `source` and `target` may be the same path. When
 /// copying a video stream fails, which happens for real video rather than cover art,
-/// the conversion is retried once with video dropped; if that fails too, the first
-/// failure is reported. A run that exceeds [`FFMPEG_TIMEOUT`] is killed and not retried.
+/// the conversion is retried once with video dropped; if that fails too, both failures
+/// are reported. A run that exceeds [`FFMPEG_TIMEOUT`] is killed and not retried.
 async fn convert_to_mp3(source: &Path, target: &Path, input_format: &str) -> Conversion {
     let (source, target) = match (std::path::absolute(source), std::path::absolute(target)) {
         (Ok(source), Ok(target)) => (source, target),
@@ -449,7 +450,10 @@ async fn convert_to_mp3(source: &Path, target: &Path, input_format: &str) -> Con
     let mut result = run_ffmpeg(&source, &partial, input_format, FFMPEG_KEEP_ART_ARGS).await;
     if let FfmpegRun::Failed(first) = result {
         result = match run_ffmpeg(&source, &partial, input_format, FFMPEG_DROP_VIDEO_ARGS).await {
-            FfmpegRun::Failed(_) => FfmpegRun::Failed(first),
+            FfmpegRun::Failed(second) if second == first => FfmpegRun::Failed(first),
+            FfmpegRun::Failed(second) => {
+                FfmpegRun::Failed(format!("{}; without video: {}", first, second))
+            }
             other => other,
         };
     }
@@ -514,19 +518,39 @@ async fn run_ffmpeg(
         .args(FFMPEG_OUTPUT_ARGS)
         .arg(file_url(output))
         .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true);
-    let Ok(result) = tokio::time::timeout(FFMPEG_TIMEOUT, command.output()).await else {
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return FfmpegRun::Missing,
+        Err(e) => return FfmpegRun::Failed(format!("could not run ffmpeg: {}", e)),
+    };
+    let stderr = child.stderr.take();
+    let read_stderr = async move {
+        let mut buffer = Vec::new();
+        if let Some(mut stderr) = stderr {
+            let _ = stderr.read_to_end(&mut buffer).await;
+        }
+        buffer
+    };
+
+    let finished = tokio::time::timeout(FFMPEG_TIMEOUT, async {
+        tokio::join!(child.wait(), read_stderr)
+    })
+    .await;
+    let Ok((status, stderr)) = finished else {
+        let _ = child.kill().await;
         return FfmpegRun::TimedOut;
     };
 
-    match result {
-        Ok(out) if out.status.success() => FfmpegRun::Succeeded,
-        Ok(out) => FfmpegRun::Failed(
-            ffmpeg_failure_reason(&out.stderr)
-                .unwrap_or_else(|| format!("ffmpeg exited with {}", out.status)),
+    match status {
+        Ok(status) if status.success() => FfmpegRun::Succeeded,
+        Ok(status) => FfmpegRun::Failed(
+            ffmpeg_failure_reason(&stderr)
+                .unwrap_or_else(|| format!("ffmpeg exited with {}", status)),
         ),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => FfmpegRun::Missing,
-        Err(e) => FfmpegRun::Failed(format!("could not run ffmpeg: {}", e)),
+        Err(e) => FfmpegRun::Failed(format!("could not wait for ffmpeg: {}", e)),
     }
 }
 

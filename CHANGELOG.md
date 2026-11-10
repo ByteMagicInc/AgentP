@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - A download whose first bytes are neither an ID3 tag nor a recognised audio header is now saved untagged with a warning, where it used to get an ID3 tag regardless.
 - Raw AAC and FLAC files that start with an ID3 tag were treated as MP3: saved as `.mp3`, given an ID3 tag, and never converted. AgentP now looks past the tag, so they get their real extension and **Convert To MP3** converts them. With conversion off they are saved untagged.
 - A conversion that runs longer than 20 minutes is stopped, so one bad file cannot stall the rest of a download. The original is kept, with a warning.
-- When a conversion fails, the warning now gives ffmpeg's first error rather than the one from the retry without video.
+- When a conversion and its retry without video both fail, the warning gives both of ffmpeg's errors rather than only the retry's.
 - A download keeps its URL's file extension only when it is an audio extension matching the downloaded format; otherwise an audio extension is added, so a feed cannot have AgentP save an episode as, say, an `.exe`.
 
 ## [0.3.0] - 2026-11-02
