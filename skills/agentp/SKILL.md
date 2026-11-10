@@ -18,7 +18,7 @@ Done when `agentp --version` prints a version; a declined install ends the skill
 
 ## 2. Pick the route
 
-Run `agentp podcast list --no-fetch`; each line starts with the podcast's number. A fresh install fills the list with demo podcasts on its first run: they count as saved, and the report says so. Match the request to one route:
+Run `agentp podcast list --no-fetch`; each line starts with the podcast's number. A fresh install fills the list with demo podcasts on its first run; they count as saved. Match the request to one route:
 
 - **Add only**: the user asks to add a podcast and names no episode. Already on the list: there is nothing to add, so go to Report.
 - **Saved**: the podcast is on the list (a loose name match counts; confirm only if two entries fit). Keep its number.
@@ -40,7 +40,7 @@ Done when you hold one route, and a feed URL unless it is Saved.
 
 Skip this step for Saved.
 
-**MP3s:** when the user asks for MP3 files, check `agentp podcast add --help` (or `podcast edit --help` for a saved podcast) for `--convert-to-mp3`. Listed: pass `--convert-to-mp3 true` to `add` here, or run `agentp podcast edit --podcast <number> --convert-to-mp3 true` for a saved podcast, which keeps it for later downloads; tell the user. Conversion needs `ffmpeg` on `PATH`. Not listed: tell the user this release cannot convert, and download in the feed's own format if they agree.
+**MP3s:** when the user asks for MP3 files and `agentp podcast add --help` lists `--convert-to-mp3`, pass `--convert-to-mp3 true` to the `add` below. Not listed: tell the user this release cannot convert, and download in the feed's own format if they agree. Conversion needs `ffmpeg` on `PATH`.
 
 1. Run `agentp podcast add --feed-url "<url>" --from-feed`; it reads the feed's name, album and artist. When it fails, take its error back to the feed lookup in step 2, and check the list before retrying: the podcast may already be on it.
 2. The new podcast is the last line of `agentp podcast list --no-fetch`. Check that its name is the show the user asked for and keep its number. Another show: run `agentp podcast delete --podcast <number>` and return to the feed lookup.
@@ -60,7 +60,7 @@ Address every podcast by its number: `add` accepts duplicates, and a name select
   - A number the user gives is the show's own: search for it as a word (`500`) and read the titles. `#500` is AgentP's number, which counts the feed's items and can differ.
   - A release without `--search`: run `agentp podcast episodes --podcast <number> --limit 60` for a recent episode (leave out `--limit` for an old one) and match titles and dates yourself.
 
-  One match: pass the number in its first column to `--episodes`. Several: show them with their dates and ask. None: search again without the date term and show what that finds before downloading anything.
+  One match: pass the number in its first column to `--episodes`. Several: show them with their dates and ask. None: search again without any date term and show what that finds before downloading anything; still none, tell the user.
 
 Numbers count up from the feed's last item, so in the usual newest-first feed the highest is the newest.
 
@@ -68,9 +68,10 @@ Done when you hold one selector (`--latest N`, `--oldest N`, `--episodes A,B` or
 
 ## 5. Download
 
-1. One-off only: keep the `Download folder` line of `agentp podcast show --podcast <number>` for the report.
-2. Run `agentp download --podcast <number> <selector>` with a long timeout or in the background: it prints nothing while an episode transfers.
-3. One-off only: on exit 0, run `agentp podcast delete --podcast <number>`; the audio stays on disk. On a non-zero exit, leave the entry so a retry needs no re-add, and say so.
+1. Saved, when the user asks for MP3 files: if `agentp podcast edit --help` lists `--convert-to-mp3`, run `agentp podcast edit --podcast <number> --convert-to-mp3 true` and tell the user it stays on for later downloads; otherwise handle it as step 3 says.
+2. One-off only: keep the `Download folder` line of `agentp podcast show --podcast <number>` for the report.
+3. Run `agentp download --podcast <number> <selector>` with a long timeout or in the background: it prints nothing while an episode transfers.
+4. One-off only: on exit 0, run `agentp podcast delete --podcast <number>`; the audio stays on disk. On a non-zero exit, leave the entry so a retry needs no re-add, and say so.
 
 `download` exits non-zero when any episode fails to download, write or tag, even when its audio landed before the tag failed. A `blocked URL` line means a web page came back instead of audio, usually from a content filter or proxy, sometimes the host refusing the request. `Warning:` lines leave a usable episode on disk and still exit 0.
 
