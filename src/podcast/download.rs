@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::{self, copy};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::Duration;
 
 use anyhow::Result;
 use id3::{Error, ErrorKind, Tag, TagLike};
@@ -298,7 +299,24 @@ enum AudioContainer {
     Unknown,
 }
 
+/// Length of a leading ID3v2 tag: the 10-byte header, the syncsafe size it declares,
+/// and a 10-byte footer when its flag is set. `None` when the header is not valid ID3v2.
+fn id3v2_len(bytes: &[u8]) -> Option<usize> {
+    let header = bytes.get(..10)?;
+    if &header[..3] != b"ID3" || header[6..].iter().any(|b| b & 0x80 != 0) {
+        return None;
+    }
+    let size = header[6..]
+        .iter()
+        .fold(0usize, |len, b| (len << 7) | usize::from(*b));
+    let footer = if header[5] & 0x10 != 0 { 10 } else { 0 };
+    Some(10 + size + footer)
+}
+
 impl AudioContainer {
+    /// An ID3v2 tag is skipped, and what follows decides between raw AAC, FLAC and MP3;
+    /// anything after the tag that is not clearly AAC or FLAC is treated as MP3.
+    ///
     /// MPEG audio frames and AAC ADTS frames share the leading sync bits; ADTS always
     /// sets the two layer bits to `00`, which no MPEG audio frame uses.
     fn sniff(bytes: &[u8]) -> Self {
@@ -315,7 +333,13 @@ impl AudioContainer {
             return Self::Wav;
         }
         if bytes.starts_with(b"ID3") {
-            return Self::Mp3;
+            let rest = id3v2_len(bytes)
+                .and_then(|len| bytes.get(len..))
+                .unwrap_or_default();
+            return match Self::sniff(rest) {
+                found @ (Self::Adts | Self::Flac) => found,
+                _ => Self::Mp3,
+            };
         }
         if bytes.len() < 2 || bytes[0] != 0xFF || bytes[1] & 0xE0 != 0xE0 {
             return Self::Unknown;
@@ -406,7 +430,8 @@ enum Conversion {
 /// after it succeeds, and `source` is removed only after that, so every failure leaves
 /// the original download on disk. `source` and `target` may be the same path. When
 /// copying a video stream fails, which happens for real video rather than cover art,
-/// the conversion is retried once with video dropped.
+/// the conversion is retried once with video dropped; if that fails too, the first
+/// failure is reported. A run that exceeds [`FFMPEG_TIMEOUT`] is killed and not retried.
 async fn convert_to_mp3(source: &Path, target: &Path, input_format: &str) -> Conversion {
     let (source, target) = match (std::path::absolute(source), std::path::absolute(target)) {
         (Ok(source), Ok(target)) => (source, target),
@@ -419,13 +444,23 @@ async fn convert_to_mp3(source: &Path, target: &Path, input_format: &str) -> Con
     let partial = PathBuf::from(partial);
 
     let mut result = run_ffmpeg(&source, &partial, input_format, FFMPEG_KEEP_ART_ARGS).await;
-    if matches!(result, FfmpegRun::Failed(_)) {
-        result = run_ffmpeg(&source, &partial, input_format, FFMPEG_DROP_VIDEO_ARGS).await;
+    if let FfmpegRun::Failed(first) = result {
+        result = match run_ffmpeg(&source, &partial, input_format, FFMPEG_DROP_VIDEO_ARGS).await {
+            FfmpegRun::Failed(_) => FfmpegRun::Failed(first),
+            other => other,
+        };
     }
 
     match result {
         FfmpegRun::Succeeded => {}
         FfmpegRun::Missing => return Conversion::FfmpegMissing,
+        FfmpegRun::TimedOut => {
+            let _ = fs::remove_file(&partial);
+            return Conversion::Failed(format!(
+                "ffmpeg took longer than {} minutes and was stopped",
+                FFMPEG_TIMEOUT.as_secs() / 60
+            ));
+        }
         FfmpegRun::Failed(reason) => {
             let _ = fs::remove_file(&partial);
             return Conversion::Failed(reason);
@@ -449,8 +484,13 @@ async fn convert_to_mp3(source: &Path, target: &Path, input_format: &str) -> Con
 enum FfmpegRun {
     Succeeded,
     Missing,
+    TimedOut,
     Failed(String),
 }
+
+/// Longest one `ffmpeg` run may take before it is killed, so one bad file cannot stall
+/// the rest of a download batch.
+const FFMPEG_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 
 /// Runs one `ffmpeg` conversion from `source` to `output`, both absolute paths.
 ///
@@ -462,7 +502,8 @@ async fn run_ffmpeg(
     input_format: &str,
     stream_args: &[&str],
 ) -> FfmpegRun {
-    let result = tokio::process::Command::new("ffmpeg")
+    let mut command = tokio::process::Command::new("ffmpeg");
+    command
         .args(FFMPEG_INPUT_ARGS)
         .args(["-f", input_format, "-i"])
         .arg(file_url(source))
@@ -470,9 +511,10 @@ async fn run_ffmpeg(
         .args(FFMPEG_OUTPUT_ARGS)
         .arg(file_url(output))
         .stdin(Stdio::null())
-        .kill_on_drop(true)
-        .output()
-        .await;
+        .kill_on_drop(true);
+    let Ok(result) = tokio::time::timeout(FFMPEG_TIMEOUT, command.output()).await else {
+        return FfmpegRun::TimedOut;
+    };
 
     match result {
         Ok(out) if out.status.success() => FfmpegRun::Succeeded,
@@ -872,6 +914,66 @@ mod tests {
             AudioContainer::sniff(b"ID3\x04\x00\x00\x00\x00\x01\x1b"),
             AudioContainer::Mp3
         );
+    }
+
+    fn id3_then(flags: u8, size: [u8; 4], tag_body: usize, audio: &[u8]) -> Vec<u8> {
+        let mut bytes = b"ID3\x04\x00".to_vec();
+        bytes.push(flags);
+        bytes.extend_from_slice(&size);
+        bytes.extend(std::iter::repeat_n(0u8, tag_body));
+        bytes.extend_from_slice(audio);
+        bytes
+    }
+
+    #[test]
+    fn sniff_looks_past_an_id3_tag_for_raw_aac() {
+        let bytes = id3_then(0, [0, 0, 0, 5], 5, &[0xFF, 0xF1, 0x50, 0x80]);
+
+        assert_eq!(AudioContainer::sniff(&bytes), AudioContainer::Adts);
+    }
+
+    #[test]
+    fn sniff_looks_past_an_id3_tag_for_flac() {
+        let bytes = id3_then(0, [0, 0, 1, 0], 128, b"fLaC\x00\x00\x00\x22");
+
+        assert_eq!(AudioContainer::sniff(&bytes), AudioContainer::Flac);
+    }
+
+    #[test]
+    fn sniff_keeps_mp3_after_an_id3_tag() {
+        let bytes = id3_then(0, [0, 0, 0, 5], 5, &[0xFF, 0xFB, 0x90, 0x64]);
+
+        assert_eq!(AudioContainer::sniff(&bytes), AudioContainer::Mp3);
+    }
+
+    #[test]
+    fn sniff_falls_back_to_mp3_for_a_malformed_or_truncated_id3_tag() {
+        let not_syncsafe = id3_then(0, [0, 0, 0, 0x85], 5, &[0xFF, 0xF1, 0x50, 0x80]);
+        let past_the_end = id3_then(0, [0, 0, 0x7F, 0x7F], 5, &[0xFF, 0xF1, 0x50, 0x80]);
+
+        assert_eq!(AudioContainer::sniff(&not_syncsafe), AudioContainer::Mp3);
+        assert_eq!(AudioContainer::sniff(&past_the_end), AudioContainer::Mp3);
+        assert_eq!(AudioContainer::sniff(b"ID3"), AudioContainer::Mp3);
+    }
+
+    #[test]
+    fn sniff_skips_an_id3_footer_when_its_flag_is_set() {
+        let mut bytes = id3_then(0x10, [0, 0, 0, 5], 15, &[0xFF, 0xF1, 0x50, 0x80]);
+
+        assert_eq!(AudioContainer::sniff(&bytes), AudioContainer::Adts);
+
+        bytes[5] = 0;
+        assert_eq!(AudioContainer::sniff(&bytes), AudioContainer::Mp3);
+    }
+
+    #[test]
+    fn id3_tagged_raw_aac_named_mp3_gets_an_aac_extension() {
+        let bytes = id3_then(0, [0, 0, 0, 5], 5, &[0xFF, 0xF1, 0x50, 0x80]);
+        let url = Url::parse("https://example.com/ep.mp3").unwrap();
+
+        let name = download_file_name(false, "Episode", &url, &url, AudioContainer::sniff(&bytes));
+
+        assert_eq!(name, "ep.mp3.aac");
     }
 
     #[test]
