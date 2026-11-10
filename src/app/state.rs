@@ -154,6 +154,7 @@ pub const CONFIG_MENU_ITEM_COUNT: usize = 11;
 /// - `podcast_editor_reset_all_defaults`, which resets the template by name
 /// - `add_podcast_step_is_visible`, `add_podcast_commit_text`,
 ///   `add_podcast_toggle_bool` and `add_podcast_adjust_usize`
+/// - `PODCAST_FIELD_CONVERT_TO_MP3`, read by `convert_to_mp3_warning` in `ui/widgets.rs`
 /// - the `wizard_has_fifteen_steps` test
 ///
 /// Their catch-all arms make a missed site fail silently, and
