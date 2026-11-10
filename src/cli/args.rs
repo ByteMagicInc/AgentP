@@ -54,6 +54,15 @@ pub enum Command {
         #[command(subcommand)]
         command: OpenCommand,
     },
+    #[command(
+        about = "Print the agentp agent skill (SKILL.md) that matches this version",
+        long_about = "Print the agentp agent skill (SKILL.md) that matches this version.\n\n\
+            Coding agents such as Claude Code and Codex follow it to download episodes \
+            with this CLI. Save it as SKILL.md in an agent's skill folder, for example:\n\n  \
+            mkdir -p ~/.claude/skills/agentp && agentp skill > ~/.claude/skills/agentp/SKILL.md\n\n\
+            Or install it with `npx skills add ByteMagicInc/AgentP --skill agentp -g`."
+    )]
+    Skill,
 }
 
 #[derive(Subcommand)]
@@ -94,7 +103,7 @@ pub struct EpisodesArgs {
         long,
         value_name = "QUERY",
         allow_hyphen_values = true,
-        help = "Show only episodes matching QUERY, as the TUI's / search does: words, \"phrases\", -exclusions, dates such as 11/2/2026, #500 episode numbers, and since:/until:/after:/before: ranges such as since:30d"
+        help = "Show only episodes matching QUERY, as the TUI's / search does: words, \"phrases\", -exclusions, a date (11/2/2026, 2026-11-02), a month (2026-11) or a day in any year (11/2), #500 or #100-120 episode numbers, and since:/until:/after:/before: ranges taking a date, a month, a year, today, yesterday or 30d/2w/6m/1y"
     )]
     pub search: Option<String>,
 }

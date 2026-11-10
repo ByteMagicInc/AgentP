@@ -74,6 +74,18 @@ agentp download --podcast <NAME_OR_INDEX> --latest 5
 
 Podcast selectors accept either a 1-based index or a case-insensitive name. A subcommand always runs headlessly, and the mode flags do not change that. With no subcommand, `agentp` opens the TUI unless `config.json` sets `"default_mode": "cli"`, and `--tui` or `--cli` (aliases `--user-mode` and `--agent-mode`) override that default for a single run, where `--cli` prints this help. `--help` works on every command and `agentp --version` prints the version.
 
+### From a coding agent
+
+```sh
+npx skills add ByteMagicInc/AgentP --skill agentp -g
+```
+
+This installs the `agentp` [agent skill](https://skills.sh) for Claude Code, Codex, Cursor and other coding agents, so you can ask one to download an episode, find one by topic, date or number, or add a podcast, and it drives the CLI for you. Leave out `-g` to install it into the current project only. It needs Node.js 22.20 or later. Without Node, `agentp skill` prints the copy that matches your installed version; save it as `SKILL.md` in your agent's skill folder:
+
+```sh
+mkdir -p ~/.claude/skills/agentp && agentp skill > ~/.claude/skills/agentp/SKILL.md
+```
+
 ## See AgentP in action
 
 ### Search episodes and jump to one by number
@@ -291,9 +303,11 @@ agentp config path
 agentp open downloads
 agentp open downloads --create
 agentp open podcast --podcast 1 --create
+
+agentp skill
 ```
 
-`open` refuses to open a folder that does not exist yet; `--create` makes it first.
+`open` refuses to open a folder that does not exist yet; `--create` makes it first. `agentp skill` prints the agent skill for this version (see [From a coding agent](#from-a-coding-agent)).
 
 ## Configuration
 
