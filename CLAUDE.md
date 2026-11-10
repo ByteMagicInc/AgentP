@@ -10,7 +10,7 @@ CI runs automatically only when a release is tagged (`release.yml` calls `ci.yml
   - `cargo fmt --all -- --check`
   - `cargo clippy --all-targets --locked -- -D warnings`
   - `cargo test --all --locked`
-- **Documented:** a change to keys, CLI flags or `Podcast` fields updates the matching README table (Keyboard reference, CLI reference, Per-podcast options).
+- **Documented:** a change to keys, CLI flags or `Podcast` fields updates the matching README table (Keyboard reference, CLI reference, Per-podcast options). A change to anything `skills/agentp/SKILL.md` relies on updates that skill too: a command or flag, an output line it reads (`podcast list` numbering, the `podcast show` labels, `Warning:` and `blocked URL` lines), the `podcasts.json` layout, episode numbers, or `--latest` order. `npx skills add` installs the skill from `master` at once, so merge a skill change that needs an unreleased command together with that release. When the skill starts using a command or flag newer than `agentp skill`, move its step 1 check to it: the `agentp skill --help` probe, its error line and the Done line.
 - **Pictured:** a change to a screen the README shows is re-recorded with `docs/capture_media.py`. It runs on Linux only (its docstring says how); elsewhere, say in the hand-off that the media needs re-recording.
 
 ## Commits and releases
@@ -20,6 +20,7 @@ Start commit subjects with `Fix`, `Add`, `Refactor` or `Update`: `cliff.toml` gr
 ## Running the app
 
 - `cargo run -- <subcommand>` runs the headless CLI (`podcast list`, `podcast episodes --podcast 1 --search …`, `download …`); `cargo run -- --help` lists the surface. `cargo run -- --tui` opens the TUI, which needs a real terminal; plain `cargo run` follows `default_mode` in `config.json`.
+- **Downloading episodes for the user**, rather than changing the code: follow `skills/agentp/SKILL.md`, running `cargo run -q --` wherever it says `agentp`.
 - **Both modes read and write the real config** in `<home>/.config/AgentP/` (`config.json`, `podcasts.json`). To experiment on Linux or macOS, point `HOME` at a scratch folder. On Windows `dirs::home_dir` ignores environment variables, so back up both files first and restore them after.
 
 ## Architecture
