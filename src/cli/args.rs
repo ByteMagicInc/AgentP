@@ -60,7 +60,11 @@ pub enum Command {
             Coding agents such as Claude Code and Codex follow it to download episodes \
             with this CLI. Save it as SKILL.md in an agent's skill folder, for example:\n\n  \
             mkdir -p ~/.claude/skills/agentp && agentp skill > ~/.claude/skills/agentp/SKILL.md\n\n\
-            Or install it with `npx skills add ByteMagicInc/AgentP --skill agentp -g`."
+            In Windows PowerShell, redirect through cmd so the file is UTF-8:\n\n  \
+            cmd /c \"agentp skill > %USERPROFILE%\\.claude\\skills\\agentp\\SKILL.md\"\n\n\
+            `npx skills add ByteMagicInc/AgentP --skill agentp -g` installs the repository's \
+            latest copy instead, which may be newer than this binary; it checks --help before \
+            using newer flags."
     )]
     Skill,
 }
@@ -119,9 +123,15 @@ pub struct DownloadArgs {
     pub podcast: String,
     #[arg(long, value_delimiter = ',', num_args = 1.., help = "Episode indices to download (comma-separated)")]
     pub episodes: Option<Vec<usize>>,
-    #[arg(long, help = "Download the N newest episodes")]
+    #[arg(
+        long,
+        help = "Download the first N episodes in feed order (the newest, in a feed that lists newest first)"
+    )]
     pub latest: Option<usize>,
-    #[arg(long, help = "Download the N oldest episodes")]
+    #[arg(
+        long,
+        help = "Download the last N episodes in feed order (the oldest, in a feed that lists newest first)"
+    )]
     pub oldest: Option<usize>,
     #[arg(long, help = "Download all episodes")]
     pub all: bool,
