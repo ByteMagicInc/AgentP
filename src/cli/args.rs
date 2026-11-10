@@ -108,7 +108,7 @@ pub struct EpisodesArgs {
         long,
         value_name = "QUERY",
         allow_hyphen_values = true,
-        help = "Show only episodes matching QUERY, as the TUI's / search does: words, \"phrases\", -exclusions, a date (11/2/2026, 2026-11-02), a month (2026-11) or a day in any year (11/2), #500 or #100-120 episode numbers, and since:/until:/after:/before: ranges taking a date, a month, a year, today, yesterday or 30d/2w/6m/1y"
+        help = "Show only episodes matching QUERY, as the TUI's / search does: words, \"phrases\", -exclusions, a date, month first or year first (11/2/2026, 2026-11-02), a month (11-2026, 2026-11) or a day in any year (11/2), #500 or #100-120 episode numbers, and since:/until:/after:/before: ranges taking a date, a month, a year, today, yesterday or 30d/2w/6m/1y"
     )]
     pub search: Option<String>,
 }

@@ -63,20 +63,20 @@ Done when the podcast is on the list and you hold its number. Add only goes to R
 - **Oldest:** `--oldest N`, with the same check the other way round.
 - **Every episode:** `--all`, only when the user says so.
 - **One episode by topic, date or number:** run `agentp podcast episodes --podcast <number> --search "<query>"`, building the query from the terms `agentp podcast episodes --help` shows.
-  - A relative date ("last week") becomes explicit `since:` and `until:` dates. Search three days wider on each side, and keep the dates the user meant for choosing.
+  - A relative date ("last week") becomes explicit `since:` and `until:` dates, written `YYYY-MM-DD`. Search three days wider on each side, and keep the dates the user meant for choosing.
   - Words also match episode descriptions.
   - A number the user gives is the show's own: search for it as a word (`500`) and read the titles. When no title carries it, offer `#500`, AgentP's number, which counts up from the feed's last item and can differ.
 
   Choose a match only when its date falls within the dates the user meant and its title names the topic; download it when exactly one does. Otherwise show the matches with their dates and ask. None: drop the date terms, run the search again with `--limit 10`, show those and ask; still none, tell the user.
 
-Done when you hold one selector (`--latest N`, `--oldest N`, `--episodes A,B` or `--all`), or no episode is chosen: then go to Report, deleting a One-off first with `agentp podcast delete --podcast <number>`.
+Done when you hold one selector (`--latest N`, `--oldest N`, `--episodes A,B` or `--all`), or no episode is chosen (the search found none, or the user picked none): then go to Report, deleting a One-off first with `agentp podcast delete --podcast <number>`.
 
 ## 5. Download
 
 1. Run `agentp podcast show --podcast <number>` and keep its `Download folder:` and `Convert to MP3:` lines.
-2. **MP3s:** when the user asks for MP3 files and `Convert to MP3:` is `off`, run `agentp podcast edit --podcast <number> --convert-to-mp3 true`. When it warns that ffmpeg is missing, offer `brew install ffmpeg` or `scoop install ffmpeg` before downloading; declined, episodes keep the feed's own format.
+2. **MP3s:** when the user asks for MP3 files and `Convert to MP3:` is `off`, run `agentp podcast edit --podcast <number> --convert-to-mp3 true`. When it warns that ffmpeg is missing, offer `brew install ffmpeg` or `scoop install ffmpeg` before downloading; declined, episodes keep the feed's own format. When a conversion fails or the format is one AgentP cannot identify, the original file stays and a `Warning:` line says why; the report names those episodes.
 3. Run `agentp download --podcast <number> <selector>` with a long timeout or in the background: it prints nothing while an episode transfers.
-4. Saved, when step 2 turned MP3 on: run `agentp podcast edit --podcast <number> --convert-to-mp3 false`, so one request leaves its later downloads unchanged.
+4. Saved, when item 2 turned MP3 on: run `agentp podcast edit --podcast <number> --convert-to-mp3 false`, so one request leaves its later downloads unchanged.
 5. One-off: on exit 0, run `agentp podcast delete --podcast <number>`; the audio stays on disk. On a non-zero exit, leave the entry so a retry needs no re-add, and say so.
 
 `download` exits non-zero when any episode fails to download, write or tag, even when its audio landed before the tag failed. A `blocked URL` line means a web page came back instead of audio, usually from a content filter or proxy, sometimes the host refusing the request. `Warning:` lines leave a usable episode on disk and still exit 0.

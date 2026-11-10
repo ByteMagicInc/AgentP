@@ -51,7 +51,7 @@ Entries are `COMMANDS` in `app/commands.rs`. A `shortcut` is an optional `&'stat
 
 ### Quitting
 
-Every quit path calls `App::request_quit` (`q`, the palette's **Quit**) or `request_force_quit` (`Ctrl+C`), which hold the download and unsaved-editor guards. The loop exits on `should_quit` alone.
+Every quit path calls `App::request_quit` (`q`, the palette's **Quit**), which does nothing while a download runs, or `request_force_quit` (`Ctrl+C`), which quits mid-download; both hold the unsaved-editor guard. The loop exits on `should_quit` alone.
 
 ### Episode search and jump
 
@@ -66,13 +66,13 @@ The query grammar is `podcast::episode_search`, shared with `podcast episodes --
 
 ### Podcast editor and wizard
 
-The editor (`podcast_editor.rs`) and the add-podcast wizard (`add_podcast_wizard.rs`) share `WIZARD_STEPS` and address fields **by position**: identity text first, then the bools from `PODCAST_FIELD_BOOL_START`, the usize field at `PODCAST_FIELD_USIZE`, and `user_agent` last. The editor also edits the **template**, `config.default_podcast` (Config → New-podcast defaults), which starts at `PODCAST_FIELD_BOOL_START`. A field change is done when every site listed on `PODCAST_FIELD_COUNT` in `app/state.rs` agrees: their catch-all arms fail silently, and the tests check only the step layout.
+The editor (`podcast_editor.rs`) and the add-podcast wizard (`add_podcast_wizard.rs`) share `WIZARD_STEPS` and address fields **by position**: identity text first, then the bools from `PODCAST_FIELD_BOOL_START`, the usize field at `PODCAST_FIELD_USIZE`, and `user_agent` last. The editor also edits the **template**, `config.default_podcast` (Config → New-podcast defaults), which starts at `PODCAST_FIELD_BOOL_START`. A field change is done when every site listed on `PODCAST_FIELD_COUNT` in `app/state.rs` agrees: their catch-all arms fail silently, and `wizard_steps_match_field_index_constants` checks only the step layout against the constants.
 
 ## Data and config
 
 - **Adding a `Podcast` field:** mark it `#[serde(default)]`, because existing `podcasts.json` files and the `default_podcast` in `config.json` lack it, and give it a load test like `convert_to_mp3_defaults_to_false_when_missing_from_saved_json`. Add it to `default.config.json`, which `Podcast::default()` parses, and to each podcast in `example.podcasts.json`, which seeds new installs; empty strings such as `user_agent` stay out.
 - **Feeds are not all MP3.** `download.rs` sniffs each file's container from its bytes and tags MP4 with `mp4ameta`, never ID3. With `convert_to_mp3` on, `ffmpeg` runs only on a positively sniffed container, with its demuxer forced and only local files allowed: the file is untrusted, and a probed `Unknown` file could make `ffmpeg` fetch URLs or read local files. A missing or failed conversion, an unrecognised format and an original that could not be deleted are each a `DownloadEvent::Warning`, not an `Error`: the episode is usable, so `agentp download` still exits 0. Download, write and tag failures stay errors. The docs on `AudioContainer`, `convert_to_mp3` and `run_ffmpeg` hold the details. The CLI mirrors every option through `PodcastFieldArgs` in `cli/args.rs`, `apply_podcast_fields` and the `podcast show` and `config show` printers in `cli/handlers.rs`.
-- **Episode numbers:** index 1 is the oldest episode and the highest index the newest. `feed_index` is `length - rss_idx` in `rss_feed.rs` and `download.rs` inverts it, so a newest-first feed numbers its latest episode as the episode count. `--episodes`, `podcast episodes`, go-to and the ID3 title-number prefix share this; `--latest` and `--oldest` select by feed order instead. Change it everywhere or nowhere.
+- **Episode numbers:** `feed_index` is `length - rss_idx` in `rss_feed.rs` and `download.rs` inverts it: index 1 is the feed's last item and the episode count its first, whatever their dates, so a newest-first feed numbers its oldest episode 1 and its latest as the count. `--episodes`, `podcast episodes`, go-to and the ID3 title-number prefix share this; `--latest` and `--oldest` select by feed order instead. Change it everywhere or nowhere.
 - **`save_config()` rewrites both JSON files** on every call, so a TUI edit needs one save whichever file it touches.
 - **Legacy JSON keys load but are never written.** `Podcast` in `data.rs` reads `override_*`, `leading_zeros_to_title`, `create_new_tags` and `remove_image` through `serde` aliases and writes the Rust names (`overwrite_*`, `leading_zeros_amount`). Keep every alias: dropping one silently breaks configs that predate the rename.
 - **`effective_album_name()`** names a podcast's download folder and falls back to the podcast name when `album_name` is empty.

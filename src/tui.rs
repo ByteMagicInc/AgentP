@@ -1,6 +1,7 @@
 //! TUI event loop: terminal setup, the background channels drained every frame,
-//! keys handled before the keymap (go-to digits, list jumps, the command
-//! palette's own keys, paste), and `apply_action`, which runs every `Action`.
+//! keys handled before the keymap (go-to digits, list jumps, and the command
+//! palette's own keys, its `Ctrl+V` paste included), and `apply_action`, which
+//! runs every `Action`; `Action::Paste` pastes through `insert_pasted`.
 
 use std::io::stdout;
 use std::time::Duration;
