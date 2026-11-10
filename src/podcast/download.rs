@@ -336,9 +336,12 @@ impl AudioContainer {
             let rest = id3v2_len(bytes)
                 .and_then(|len| bytes.get(len..))
                 .unwrap_or_default();
-            return match Self::sniff(rest) {
-                found @ (Self::Adts | Self::Flac) => found,
-                _ => Self::Mp3,
+            return if rest.starts_with(b"fLaC") {
+                Self::Flac
+            } else if rest.len() >= 2 && rest[0] == 0xFF && rest[1] & 0xF6 == 0xF0 {
+                Self::Adts
+            } else {
+                Self::Mp3
             };
         }
         if bytes.len() < 2 || bytes[0] != 0xFF || bytes[1] & 0xE0 != 0xE0 {
@@ -954,6 +957,17 @@ mod tests {
         assert_eq!(AudioContainer::sniff(&not_syncsafe), AudioContainer::Mp3);
         assert_eq!(AudioContainer::sniff(&past_the_end), AudioContainer::Mp3);
         assert_eq!(AudioContainer::sniff(b"ID3"), AudioContainer::Mp3);
+    }
+
+    #[test]
+    fn sniff_skips_only_one_id3_tag_without_recursing() {
+        let mut bytes = Vec::new();
+        for _ in 0..1_000_000 {
+            bytes.extend_from_slice(&[b'I', b'D', b'3', 4, 0, 0, 0, 0, 0, 0]);
+        }
+        bytes.extend_from_slice(&[0xFF, 0xF1, 0x50, 0x80]);
+
+        assert_eq!(AudioContainer::sniff(&bytes), AudioContainer::Mp3);
     }
 
     #[test]
