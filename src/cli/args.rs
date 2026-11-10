@@ -6,8 +6,8 @@ use crate::podcast::{BannerStyle, DefaultMode};
 #[command(
     name = "agentp",
     version,
-    about = "AgentP — a fast podcast downloader with customizable ID3 tagging",
-    long_about = "AgentP is a fast podcast downloader with customizable ID3 tagging.\n\n\
+    about = "AgentP — a fast podcast downloader with customizable ID3 and MP4 tagging",
+    long_about = "AgentP is a fast podcast downloader with customizable ID3 and MP4 tagging.\n\n\
         Run without a subcommand to launch the default mode (TUI by default).\n\
         Use subcommands like 'podcast', 'download', 'config', and 'open' for\n\
         headless CLI operation. Set default_mode in config to change the\n\
@@ -111,20 +111,23 @@ pub struct DownloadArgs {
 
 #[derive(Args)]
 pub struct PodcastFieldArgs {
-    #[arg(long, help = "Album name for downloads folder and ID3 tag")]
+    #[arg(long, help = "Album name for downloads folder and album tag")]
     pub album_name: Option<String>,
-    #[arg(long, help = "Artist name for ID3 tag")]
+    #[arg(long, help = "Artist name for the artist tag")]
     pub artist: Option<String>,
     #[arg(
         long,
         help = "Custom User-Agent for this podcast's downloads (blank = built-in default)"
     )]
     pub user_agent: Option<String>,
-    #[arg(long, help = "Write ID3 tags to downloaded files")]
+    #[arg(
+        long,
+        help = "Write ID3 tags (MP3) or MP4 metadata (M4A) to downloaded files"
+    )]
     pub overwrite_tags: Option<bool>,
     #[arg(
         long,
-        help = "Remove source file's existing ID3 tag before writing a fresh minimal one \
+        help = "Remove source file's existing tags before writing a fresh minimal one \
             (useful when the source has huge embedded metadata)"
     )]
     pub remove_existing_tags: Option<bool>,
@@ -134,9 +137,9 @@ pub struct PodcastFieldArgs {
         help = "Remove embedded cover art from downloaded audio files"
     )]
     pub remove_images: Option<bool>,
-    #[arg(long, help = "Write album name into ID3 album tag")]
+    #[arg(long, help = "Write album name into the album tag")]
     pub overwrite_album_name: Option<bool>,
-    #[arg(long, help = "Write artist into ID3 artist tag")]
+    #[arg(long, help = "Write artist into the artist tag")]
     pub overwrite_artist: Option<bool>,
     #[arg(long, help = "Rename files to match episode title")]
     pub overwrite_file_name: Option<bool>,
@@ -145,7 +148,7 @@ pub struct PodcastFieldArgs {
         help = "Re-encode episodes served as M4A, AAC, Ogg, FLAC or WAV to MP3 with ffmpeg (off by default); the original is kept when ffmpeg is missing or fails"
     )]
     pub convert_to_mp3: Option<bool>,
-    #[arg(long, help = "Write episode title into ID3 title tag")]
+    #[arg(long, help = "Write episode title into the title tag")]
     pub overwrite_title: Option<bool>,
     #[arg(long, help = "Prepend episode number to title tag")]
     pub append_number_to_title: Option<bool>,

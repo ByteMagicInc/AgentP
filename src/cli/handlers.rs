@@ -414,6 +414,11 @@ fn run_config(command: ConfigCommand) -> Result<()> {
                 bool_label(d.overwrite_file_name)
             );
             println!("  convert_to_mp3:        {}", bool_label(d.convert_to_mp3));
+            println!(
+                "  append_number:         {}",
+                bool_label(d.append_number_to_title)
+            );
+            println!("  leading_zeros:         {}", d.leading_zeros_amount);
             println!();
             println!(
                 "ffmpeg:         {}",
@@ -423,11 +428,6 @@ fn run_config(command: ConfigCommand) -> Result<()> {
                     "not found on PATH (needed only for Convert To MP3)"
                 }
             );
-            println!(
-                "  append_number:         {}",
-                bool_label(d.append_number_to_title)
-            );
-            println!("  leading_zeros:         {}", d.leading_zeros_amount);
             println!();
             println!("Config files:");
             println!(
