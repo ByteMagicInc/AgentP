@@ -145,6 +145,9 @@ pub struct Config {
     pub banner_style: BannerStyle,
 }
 
+/// How the lists show an episode's publish date, such as `Sep 10, 2025`.
+pub const DISPLAY_DATE_FORMAT: &str = "%b %d, %Y";
+
 /// Metadata for a single episode parsed from an RSS feed.
 #[derive(Debug, Clone)]
 pub struct EpisodeInfo {

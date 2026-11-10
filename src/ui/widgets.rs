@@ -315,7 +315,7 @@ pub(super) fn format_date(raw: Option<&str>) -> String {
     raw.and_then(|d| {
         chrono::DateTime::parse_from_rfc2822(d)
             .ok()
-            .map(|dt| dt.format("%b %d, %Y").to_string())
+            .map(|dt| dt.format(crate::podcast::DISPLAY_DATE_FORMAT).to_string())
     })
     .unwrap_or_default()
 }

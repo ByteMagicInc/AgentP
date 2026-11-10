@@ -3,6 +3,7 @@
 mod config_files;
 mod data;
 mod download;
+mod episode_search;
 pub mod ffmpeg;
 mod http;
 mod rss_feed;
@@ -11,4 +12,5 @@ pub use config_files::*;
 pub use data::*;
 pub(crate) use download::sanitize_filename;
 pub use download::*;
+pub use episode_search::*;
 pub use rss_feed::*;

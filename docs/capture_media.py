@@ -20,7 +20,7 @@ pyte interprets its terminal output and Pillow renders the cells into a framed
 terminal image. Screen assertions reject unexpected states before capture.
 Pauses sample live output to preserve animation, then frames become looping GIFs.
 
-The walkthroughs browse and select episodes, search Merge Conflict's episodes
+The walkthroughs browse and select episodes, search Merge Conflict's episodes by word, date range and exclusion
 and jump to one by number, filter the command palette and visit configuration, and
 prepopulate The Pragmatic Engineer from its RSS feed after a URL that is not a
 feed shows why Prepopulate failed. They never download audio or edit the
@@ -403,7 +403,9 @@ def search():
         t.capture(1000, expected=("Merge Conflict",))
         t.send(b"\r")
         t.wait_for(
-            lambda: "Loading episodes" not in t.text() and "[ ]" in t.text()
+            lambda: "Loading episodes" not in t.text()
+            and "[ ]" in t.text()
+            and "Go to #" in t.text()
         )
         t.capture(1600, expected=("Merge Conflict", "[ ]", "Search", "Go to #"))
         t.send(b"/")
@@ -412,8 +414,20 @@ def search():
             t.send(bytes([ch]))
             t.capture(200)
         t.capture(1800, expected=("Search: copilot_", "episodes"))
+        for ch in b" since:2":
+            t.send(bytes([ch]))
+            t.capture(200)
+        t.capture(1600, expected=("since: needs a date",))
+        for ch in b"025":
+            t.send(bytes([ch]))
+            t.capture(250)
+        t.capture(1600, expected=("Search: copilot since:2025_", "episodes"))
+        for ch in b" -sdk":
+            t.send(bytes([ch]))
+            t.capture(250)
+        t.capture(2200, expected=("Search: copilot since:2025 -sdk_", "episodes"))
         t.send(b"\r")
-        t.capture(1000, expected=("Filter:", "copilot"))
+        t.capture(1000, expected=("Filter:", "copilot since:2025 -sdk"))
         t.send(b"j ")
         t.capture(1400, expected=("[x]", "Filter:"))
         t.send(b"\x1b")

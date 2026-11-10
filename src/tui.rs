@@ -34,12 +34,27 @@ struct Channels {
     feed_info: FeedInfoRx,
 }
 
+fn clipboard_text() -> Option<String> {
+    arboard::Clipboard::new().ok()?.get_text().ok()
+}
+
 fn paste_from_clipboard(target: &mut String) {
-    if let Ok(mut cb) = arboard::Clipboard::new()
-        && let Ok(text) = cb.get_text()
-    {
-        for c in text.chars().filter(|c| *c != '\n' && *c != '\r') {
-            target.push(c);
+    if let Some(text) = clipboard_text() {
+        target.extend(text.chars().filter(|c| *c != '\n' && *c != '\r'));
+    }
+}
+
+/// Put pasted `text` into the context's text buffer. The episode prompts
+/// decide for themselves what a paste means; every other field drops line
+/// breaks.
+fn insert_pasted(app: &mut App, context: KeyContext, text: &str) {
+    match context {
+        KeyContext::EpisodeSearch => app.episode_search_paste(text),
+        KeyContext::EpisodeJump => app.episode_jump_paste(text),
+        _ => {
+            if let Some(buffer) = text_buffer(app, context) {
+                buffer.extend(text.chars().filter(|c| *c != '\n' && *c != '\r'));
+            }
         }
     }
 }
@@ -394,12 +409,9 @@ fn dispatch_action(app: &mut App, action: Action, channels: &mut Channels) {
 
         Action::Paste => {
             let context = app.key_context();
-            if let Some(buffer) = text_buffer(app, context) {
-                let mut pasted = String::new();
-                paste_from_clipboard(&mut pasted);
-                buffer.push_str(&pasted);
+            if let Some(text) = clipboard_text() {
+                insert_pasted(app, context, &text);
             }
-            app.episode_prompt_edited();
         }
     }
 }
@@ -553,4 +565,63 @@ pub async fn run(config: podcast::Config, config_notice: Option<String>) -> Resu
     stdout().execute(LeaveAlternateScreen)?;
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::podcast::EpisodeInfo;
+
+    fn episode_app() -> App {
+        let mut app = app::test_app_one_podcast();
+        app.screen = Screen::EpisodeSelect;
+        app.set_episodes(vec![
+            EpisodeInfo {
+                title: "Rust in production".to_string(),
+                feed_index: 2,
+                pub_date: None,
+                description: String::new(),
+            },
+            EpisodeInfo {
+                title: "Gardening".to_string(),
+                feed_index: 1,
+                pub_date: None,
+                description: String::new(),
+            },
+        ]);
+        app
+    }
+
+    #[test]
+    fn a_multi_line_paste_searches_its_words() {
+        let mut app = episode_app();
+        app.episode_search_open();
+        let context = app.key_context();
+        insert_pasted(&mut app, context, "rust\nproduction\n");
+        assert_eq!(app.episode_query, "rust production ");
+        assert_eq!(app.episode_visible, vec![0]);
+    }
+
+    #[test]
+    fn a_pasted_go_to_number_is_checked_not_stripped() {
+        let mut app = episode_app();
+        app.episode_jump_open(None);
+        let context = app.key_context();
+        insert_pasted(&mut app, context, "-2");
+        assert_eq!(app.episode_jump_buffer, "");
+        assert!(app.episode_jump_error.is_some());
+        let context = app.key_context();
+        insert_pasted(&mut app, context, "2");
+        assert_eq!(app.episode_jump_buffer, "2");
+    }
+
+    #[test]
+    fn other_fields_still_drop_pasted_line_breaks() {
+        let mut app = app::test_app_one_podcast();
+        app.screen = Screen::AddPodcast;
+        let context = app.key_context();
+        assert_eq!(context, KeyContext::WizardText);
+        insert_pasted(&mut app, context, "https://example.com/\nfeed");
+        assert_eq!(app.add_podcast.text_buffer, "https://example.com/feed");
+    }
 }
