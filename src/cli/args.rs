@@ -63,8 +63,8 @@ pub enum Command {
             In Windows PowerShell, redirect through cmd so the file is UTF-8:\n\n  \
             cmd /c \"agentp skill > %USERPROFILE%\\.claude\\skills\\agentp\\SKILL.md\"\n\n\
             `npx skills add ByteMagicInc/AgentP --skill agentp -g` installs the repository's \
-            latest copy instead, which may be newer than this binary; it checks --help before \
-            using newer flags."
+            latest copy instead, written for the latest release; it offers to upgrade an \
+            older binary."
     )]
     Skill,
 }

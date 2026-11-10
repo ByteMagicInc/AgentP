@@ -10,7 +10,7 @@ CI runs automatically only when a release is tagged (`release.yml` calls `ci.yml
   - `cargo fmt --all -- --check`
   - `cargo clippy --all-targets --locked -- -D warnings`
   - `cargo test --all --locked`
-- **Documented:** a change to keys, CLI flags or `Podcast` fields updates the matching README table (Keyboard reference, CLI reference, Per-podcast options). A change to a CLI command or flag that `skills/agentp/SKILL.md` uses updates that skill too: users install it with `npx skills add`, and it must still work with older releases.
+- **Documented:** a change to keys, CLI flags or `Podcast` fields updates the matching README table (Keyboard reference, CLI reference, Per-podcast options). A change to a CLI command or flag that `skills/agentp/SKILL.md` uses updates that skill too. The skill is written for the release it ships with, and `npx skills add` installs it from `master`, ahead of that release: when it starts using a command or flag newer than `agentp skill`, move its step 1 check to that command or flag.
 - **Pictured:** a change to a screen the README shows is re-recorded with `docs/capture_media.py`. It runs on Linux only (its docstring says how); elsewhere, say in the hand-off that the media needs re-recording.
 
 ## Commits and releases

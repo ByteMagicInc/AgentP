@@ -7,14 +7,20 @@ description: Downloads podcast episodes and adds podcasts with the AgentP CLI (`
 
 ## 1. Find the CLI
 
-Run `agentp --version`. When `agentp` is missing, offer the user the install for their platform and run it only once they agree:
+This skill is written for the AgentP release that ships `agentp skill`, and every later step relies on its commands. Run `agentp skill --help`:
+
+- **Help prints:** the release is current enough; go on.
+- **`agentp` is not found:** offer the user the install for their platform.
+- **An unrecognised-subcommand error:** the installed AgentP is older than this skill. Offer the upgrade: `brew upgrade agent-p`, `scoop update agent-p`, `cargo install agent-p --locked`, or a newer archive.
+
+Install or upgrade only once the user agrees:
 
 - macOS or Linux: `brew install ByteMagicInc/tap/agent-p`
 - Windows: `scoop bucket add bytemagicinc https://github.com/ByteMagicInc/scoop-bucket`, then `scoop install agent-p`
 - With Rust: `cargo install agent-p --locked`
 - Otherwise: an archive from <https://github.com/ByteMagicInc/AgentP/releases>, with `agentp` placed on `PATH`
 
-Done when `agentp --version` prints a version; a declined install ends the skill.
+Done when `agentp skill --help` prints help; a declined install or upgrade ends the skill.
 
 ## 2. Pick the route
 
@@ -40,7 +46,7 @@ Done when you hold one route, and a feed URL unless it is Saved.
 
 Skip this step for Saved.
 
-**MP3s:** when the user asks for MP3 files and `agentp podcast add --help` lists `--convert-to-mp3`, pass `--convert-to-mp3 true` to the `add` below. Not listed: tell the user this release cannot convert, and download in the feed's own format if they agree. Conversion needs `ffmpeg` on `PATH`.
+**MP3s:** when the user asks for MP3 files, pass `--convert-to-mp3 true` to the `add` below. Conversion needs `ffmpeg` on `PATH`; `add` prints a warning when it is missing, and then episodes keep the feed's own format.
 
 1. Run `agentp podcast add --feed-url "<url>" --from-feed`; it reads the feed's name, album and artist. When it fails, take its error back to the feed lookup in step 2, and check the list before retrying: the podcast may already be on it.
 2. The new podcast is the last line of `agentp podcast list --no-fetch`. Check that its name is the show the user asked for and keep its number. Another show: run `agentp podcast delete --podcast <number>` and return to the feed lookup.
@@ -54,11 +60,10 @@ Address every podcast by its number: `add` accepts duplicates, and a name select
 - **Newest:** `--latest N`, with N = 1 by default; a download request that names no episode means this. `--latest` takes the first N items in feed order, so first run `agentp podcast episodes --podcast <number> --limit 2`: when the first date is older than the second, the feed lists oldest first, and the newest are `--oldest N`.
 - **Oldest:** `--oldest N`, with the same check the other way round.
 - **Every episode:** `--all`, only when the user says so.
-- **One episode by topic, date or number:** when `agentp podcast episodes --help` lists `--search`, run `agentp podcast episodes --podcast <number> --search "<query>"`, building the query from the terms that help text shows.
+- **One episode by topic, date or number:** run `agentp podcast episodes --podcast <number> --search "<query>"`, building the query from the terms `agentp podcast episodes --help` shows.
   - A relative date ("last week") becomes explicit `since:` and `until:` dates, a few days wider than the request.
   - Words also match episode descriptions, so a title that names the topic beats one that only mentions it.
   - A number the user gives is the show's own: search for it as a word (`500`) and read the titles. `#500` is AgentP's number, which counts the feed's items and can differ.
-  - A release without `--search`: run `agentp podcast episodes --podcast <number> --limit 60` for a recent episode (leave out `--limit` for an old one) and match titles and dates yourself.
 
   One match: pass the number in its first column to `--episodes`. Several: show them with their dates and ask. None: search again without any date term and show what that finds before downloading anything; still none, tell the user.
 
@@ -68,7 +73,7 @@ Done when you hold one selector (`--latest N`, `--oldest N`, `--episodes A,B` or
 
 ## 5. Download
 
-1. Saved, when the user asks for MP3 files: if `agentp podcast edit --help` lists `--convert-to-mp3`, run `agentp podcast edit --podcast <number> --convert-to-mp3 true` and tell the user it stays on for later downloads; otherwise handle it as step 3 says.
+1. Saved, when the user asks for MP3 files: run `agentp podcast edit --podcast <number> --convert-to-mp3 true` and tell the user it stays on for later downloads. Conversion needs `ffmpeg`, as in step 3.
 2. One-off only: keep the `Download folder` line of `agentp podcast show --podcast <number>` for the report.
 3. Run `agentp download --podcast <number> <selector>` with a long timeout or in the background: it prints nothing while an episode transfers.
 4. One-off only: on exit 0, run `agentp podcast delete --podcast <number>`; the audio stays on disk. On a non-zero exit, leave the entry so a retry needs no re-add, and say so.

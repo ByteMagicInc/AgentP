@@ -80,7 +80,7 @@ Podcast selectors accept either a 1-based index or a case-insensitive name. A su
 npx skills add ByteMagicInc/AgentP --skill agentp -g
 ```
 
-This installs the `agentp` [agent skill](https://skills.sh) for Claude Code, Codex, Cursor and other coding agents, so you can ask one to download an episode, find one by topic, date or number, or add a podcast, and it drives the CLI for you. Leave out `-g` to install it into the current project only. It needs Node.js 22.20 or later, and installs the latest skill, which checks your `agentp --help` before using newer flags.
+This installs the `agentp` [agent skill](https://skills.sh) for Claude Code, Codex, Cursor and other coding agents, so you can ask one to download an episode, find one by topic, date or number, or add a podcast, and it drives the CLI for you. Leave out `-g` to install it into the current project only. It needs Node.js 22.20 or later. The skill is written for the latest AgentP release and offers to upgrade an older one.
 
 Without Node, `agentp skill` (in releases after 0.3.0) prints the copy bundled with your installed version. Save it as `SKILL.md` in your agent's skill folder:
 
