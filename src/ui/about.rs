@@ -1,3 +1,5 @@
+//! Renders the about screen.
+
 use ratatui::{
     Frame,
     layout::{Constraint, Flex, Layout},

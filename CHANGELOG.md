@@ -8,11 +8,16 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **An agent skill** for coding agents such as Claude Code and Codex: it finds a podcast's feed, adds the podcast or downloads from it once, finds an episode by topic, date or number, and downloads it. Install it with `npx skills add ByteMagicInc/AgentP --skill agentp -g`, or save the copy that matches your version with `agentp skill`.
+- Episode search understands dates and ranges, written month first or year first: `11/2/2026`, `2026-11-02`, a month (`2026-11`), a day in any year (`11/2`), and `since:`, `until:`, `after:` and `before:` with a date, a month, a year, `today`, `yesterday` or `30d`/`2w`/`6m`/`1y`. It also takes `"phrases"`, `-exclusions`, and `#500` or `#100-120` episode numbers, and underlines the matching words in each title.
+- `agentp podcast episodes --search QUERY` filters episodes with the same terms as the TUI search; `--limit` caps the matches.
 - **Convert To MP3**, an optional per-podcast setting, off by default. When it is on, episodes a feed serves as M4A, AAC, Ogg, FLAC, or WAV are re-encoded to MP3 with ffmpeg and tagged like any other MP3. Turn it on in the podcast editor, in the add-podcast wizard, in **New Podcast Defaults**, or with `--convert-to-mp3 true`. It needs ffmpeg on `PATH`: the TUI shows a warning beside the setting, and `podcast add`/`podcast edit` print one, while ffmpeg is missing. Without ffmpeg, or when a conversion fails, the original file is kept and the download log shows a warning. Files AgentP cannot identify are never passed to ffmpeg, and ffmpeg runs with the input format fixed and local-file access only.
 - `agentp config show` reports whether ffmpeg was found. The Homebrew formula and Scoop manifest recommend ffmpeg after install without installing it.
 
 ### Fixed
 
+- Search matched the feed's raw date string instead of the date the list shows, so a date typed as shown found nothing and short numbers such as `06` matched every episode.
+- `Esc` in the search bar puts back the filter it opened with, and changing the sort order keeps the cursor on its episode.
 - Episodes a feed serves as AAC audio (`.m4a`, `audio/mp4`) were left unplayable, because tagging wrote an MP3 ID3 tag in front of the MP4 data. They are now tagged with MP4 metadata and stay valid, or converted to MP3 when **Convert To MP3** is on. Raw AAC and other formats that are not converted are saved untagged, with a notice when tagging or image removal is on.
 - With **Rename Files** on, the file takes its extension from the enclosure URL when it matches the detected audio format, falling back to that format's default (`.mp3`, `.m4a`, `.aac`, `.ogg`, `.flac`, or `.wav`), instead of always ending in `.mp3`.
 - A download whose first bytes are neither an ID3 tag nor a recognised audio header is now saved untagged with a warning, where it used to get an ID3 tag regardless.

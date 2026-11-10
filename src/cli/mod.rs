@@ -1,3 +1,5 @@
+//! Headless CLI mode.
+
 pub mod args;
 mod handlers;
 

@@ -575,6 +575,8 @@ static DELETE_PODCAST: Binding = Binding {
     hint_when: None,
 };
 
+/// `Enter` is left out on purpose: on the podcast list it opens a podcast, so
+/// a repeated press could confirm an irreversible delete.
 static CONFIRM_DELETE_PODCAST: Binding = Binding {
     display: None,
     label: None,

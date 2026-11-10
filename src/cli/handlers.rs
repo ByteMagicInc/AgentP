@@ -1,3 +1,6 @@
+//! Runs each CLI subcommand. `resolve_podcast` turns a `--podcast` selector into
+//! an index, trying an exact case-insensitive name before a 1-based number.
+
 use anyhow::{Result, bail};
 use tokio::sync::mpsc;
 
@@ -41,8 +44,16 @@ pub async fn run(command: Command) -> Result<()> {
         Command::Download(args) => run_download(args).await,
         Command::Config { command } => run_config(command),
         Command::Open { command } => run_open(command),
+        Command::Skill => {
+            print!("{}", AGENT_SKILL);
+            Ok(())
+        }
     }
 }
+
+/// The agent skill shipped in `skills/agentp/`, embedded so `agentp skill` prints the
+/// copy that matches this binary's flags.
+const AGENT_SKILL: &str = include_str!("../../skills/agentp/SKILL.md");
 
 async fn run_podcast(command: PodcastCommand) -> Result<()> {
     match command {
@@ -540,6 +551,14 @@ fn run_open(command: OpenCommand) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_agent_skill_is_the_agentp_skill_file() {
+        let front_matter = AGENT_SKILL.lines().take(3).collect::<Vec<_>>();
+        assert_eq!(front_matter[0].trim_end(), "---");
+        assert_eq!(front_matter[1].trim_end(), "name: agentp");
+        assert!(front_matter[2].starts_with("description: "));
+    }
 
     fn episode(title: &str, feed_index: usize, date: &str) -> EpisodeInfo {
         EpisodeInfo {

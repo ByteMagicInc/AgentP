@@ -74,6 +74,27 @@ agentp download --podcast <NAME_OR_INDEX> --latest 5
 
 Podcast selectors accept either a 1-based index or a case-insensitive name. A subcommand always runs headlessly, and the mode flags do not change that. With no subcommand, `agentp` opens the TUI unless `config.json` sets `"default_mode": "cli"`, and `--tui` or `--cli` (aliases `--user-mode` and `--agent-mode`) override that default for a single run, where `--cli` prints this help. `--help` works on every command and `agentp --version` prints the version.
 
+### From a coding agent
+
+```sh
+npx skills add ByteMagicInc/AgentP --skill agentp -g
+```
+
+This installs the `agentp` [agent skill](https://skills.sh) for Claude Code, Codex, Cursor and other coding agents, so you can ask one to download an episode, find one by topic, date or number, or add a podcast, and it drives the CLI for you. Leave out `-g` to install it into the current project only. It needs Node.js 22.20 or later. The skill tracks the `master` branch, so it can be ahead of the latest release: it offers to upgrade an older AgentP, and stops when no newer release is out yet.
+
+Without Node, `agentp skill` (in releases after 0.3.0) prints the copy bundled with your installed version. Save it as `SKILL.md` in your agent's skill folder:
+
+```sh
+mkdir -p ~/.claude/skills/agentp && agentp skill > ~/.claude/skills/agentp/SKILL.md
+```
+
+On Windows, from PowerShell, go through `cmd`: Windows PowerShell 5.1's `>` writes UTF-16, which agents cannot read.
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.claude\skills\agentp" | Out-Null
+cmd /c 'agentp skill > "%USERPROFILE%\.claude\skills\agentp\SKILL.md"'
+```
+
 ## See AgentP in action
 
 ### Search episodes and jump to one by number
@@ -291,9 +312,11 @@ agentp config path
 agentp open downloads
 agentp open downloads --create
 agentp open podcast --podcast 1 --create
+
+agentp skill
 ```
 
-`open` refuses to open a folder that does not exist yet; `--create` makes it first.
+`open` refuses to open a folder that does not exist yet; `--create` makes it first. `agentp skill` prints the agent skill for this version (see [From a coding agent](#from-a-coding-agent)).
 
 ## Configuration
 
