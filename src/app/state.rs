@@ -56,8 +56,12 @@ pub struct DownloadProgress {
     pub current_index: usize,
     pub total: usize,
     pub completed: Vec<String>,
-    pub tagged: Vec<String>,
+    /// Positions in `completed` of episodes converted to MP3.
+    pub converted: Vec<usize>,
+    /// Positions in `completed` of episodes whose tags were written.
+    pub tagged: Vec<usize>,
     pub finished: bool,
+    pub warnings: Vec<String>,
     pub errors: Vec<String>,
 }
 
@@ -69,10 +73,21 @@ impl DownloadProgress {
             current_index: 0,
             total: 0,
             completed: Vec::new(),
+            converted: Vec::new(),
             tagged: Vec::new(),
             finished: false,
+            warnings: Vec::new(),
             errors: Vec::new(),
         }
+    }
+
+    /// The most recent `completed` row named `episode_name`.
+    ///
+    /// Episodes are processed one at a time and each one's `Converted` and `Tagged`
+    /// follow its own `Completed`, so the latest match is that episode even when
+    /// several share a title.
+    pub fn latest_completed(&self, episode_name: &str) -> Option<usize> {
+        self.completed.iter().rposition(|name| name == episode_name)
     }
 
     /// True until the batch reports `Finished`.
@@ -139,16 +154,18 @@ pub const CONFIG_MENU_ITEM_COUNT: usize = 11;
 /// - `podcast_editor_reset_all_defaults`, which resets the template by name
 /// - `add_podcast_step_is_visible`, `add_podcast_commit_text`,
 ///   `add_podcast_toggle_bool` and `add_podcast_adjust_usize`
-/// - the `wizard_has_fourteen_steps` test
+/// - the `wizard_has_fifteen_steps` test
 ///
 /// Their catch-all arms make a missed site fail silently, and
 /// `wizard_steps_match_field_index_constants` checks only `WIZARD_STEPS`
 /// against these constants, not the match arms.
-pub const PODCAST_FIELD_COUNT: usize = 14;
+pub const PODCAST_FIELD_COUNT: usize = 15;
 /// Index of the first boolean field in the podcast editor.
 pub const PODCAST_FIELD_BOOL_START: usize = 4;
 /// Index of the leading-zeros usize field in the podcast editor.
-pub const PODCAST_FIELD_USIZE: usize = 12;
+pub const PODCAST_FIELD_USIZE: usize = 13;
+/// Index of the Convert To MP3 bool field in the podcast editor and wizard.
+pub const PODCAST_FIELD_CONVERT_TO_MP3: usize = 10;
 
 /// UI state for the config menu screen.
 pub struct ConfigEditorState {
@@ -513,8 +530,18 @@ impl App {
             DownloadEvent::Completed { episode_name } => {
                 self.download_progress.completed.push(episode_name);
             }
+            DownloadEvent::Converted { episode_name } => {
+                if let Some(row) = self.download_progress.latest_completed(&episode_name) {
+                    self.download_progress.converted.push(row);
+                }
+            }
             DownloadEvent::Tagged { episode_name } => {
-                self.download_progress.tagged.push(episode_name);
+                if let Some(row) = self.download_progress.latest_completed(&episode_name) {
+                    self.download_progress.tagged.push(row);
+                }
+            }
+            DownloadEvent::Warning { message } => {
+                self.download_progress.warnings.push(message);
             }
             DownloadEvent::Error { message } => {
                 self.download_progress.errors.push(message);
@@ -797,5 +824,41 @@ mod tests {
         assert!(!app.download_progress.finished);
         app.handle_download_event(DownloadEvent::Finished);
         assert!(app.download_progress.finished);
+    }
+
+    #[test]
+    fn conversion_and_tagging_mark_only_their_own_row_when_titles_repeat() {
+        let mut app = test_app_one_podcast();
+        for event in [
+            DownloadEvent::Completed {
+                episode_name: "Bonus".into(),
+            },
+            DownloadEvent::Tagged {
+                episode_name: "Bonus".into(),
+            },
+            DownloadEvent::Completed {
+                episode_name: "Bonus".into(),
+            },
+            DownloadEvent::Converted {
+                episode_name: "Bonus".into(),
+            },
+        ] {
+            app.handle_download_event(event);
+        }
+
+        assert_eq!(app.download_progress.completed, vec!["Bonus", "Bonus"]);
+        assert_eq!(app.download_progress.tagged, vec![0]);
+        assert_eq!(app.download_progress.converted, vec![1]);
+    }
+
+    #[test]
+    fn warnings_are_kept_apart_from_errors() {
+        let mut app = test_app_one_podcast();
+        app.handle_download_event(DownloadEvent::Warning {
+            message: "ffmpeg was not found".into(),
+        });
+
+        assert_eq!(app.download_progress.warnings, vec!["ffmpeg was not found"]);
+        assert!(app.download_progress.errors.is_empty());
     }
 }

@@ -173,7 +173,7 @@ impl App {
             1 => self.podcast_editor.working_copy.name.clone(),
             2 => self.podcast_editor.working_copy.album_name.clone(),
             3 => self.podcast_editor.working_copy.artist.clone(),
-            13 => self.podcast_editor.working_copy.user_agent.clone(),
+            14 => self.podcast_editor.working_copy.user_agent.clone(),
             _ => return,
         };
         self.podcast_editor.text_buffer = value;
@@ -188,7 +188,7 @@ impl App {
             1 => self.podcast_editor.working_copy.name = buf,
             2 => self.podcast_editor.working_copy.album_name = buf,
             3 => self.podcast_editor.working_copy.artist = buf,
-            13 => self.podcast_editor.working_copy.user_agent = buf,
+            14 => self.podcast_editor.working_copy.user_agent = buf,
             _ => {}
         }
         self.podcast_editor.dirty = true;
@@ -230,10 +230,14 @@ impl App {
                 true
             }
             10 => {
-                p.overwrite_title = !p.overwrite_title;
+                p.convert_to_mp3 = !p.convert_to_mp3;
                 true
             }
             11 => {
+                p.overwrite_title = !p.overwrite_title;
+                true
+            }
+            12 => {
                 p.append_number_to_title = !p.append_number_to_title;
                 true
             }
@@ -269,10 +273,11 @@ impl App {
             7 => p.overwrite_album_name = def.overwrite_album_name,
             8 => p.overwrite_artist = def.overwrite_artist,
             9 => p.overwrite_file_name = def.overwrite_file_name,
-            10 => p.overwrite_title = def.overwrite_title,
-            11 => p.append_number_to_title = def.append_number_to_title,
-            12 => p.leading_zeros_amount = def.leading_zeros_amount,
-            13 => p.user_agent = def.user_agent,
+            10 => p.convert_to_mp3 = def.convert_to_mp3,
+            11 => p.overwrite_title = def.overwrite_title,
+            12 => p.append_number_to_title = def.append_number_to_title,
+            13 => p.leading_zeros_amount = def.leading_zeros_amount,
+            14 => p.user_agent = def.user_agent,
             _ => return,
         }
         self.podcast_editor.dirty = true;
@@ -287,6 +292,7 @@ impl App {
         p.overwrite_album_name = def.overwrite_album_name;
         p.overwrite_artist = def.overwrite_artist;
         p.overwrite_file_name = def.overwrite_file_name;
+        p.convert_to_mp3 = def.convert_to_mp3;
         p.overwrite_title = def.overwrite_title;
         p.append_number_to_title = def.append_number_to_title;
         p.leading_zeros_amount = def.leading_zeros_amount;

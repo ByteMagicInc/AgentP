@@ -13,7 +13,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "AI Explained",
@@ -28,7 +29,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Latent Space",
@@ -43,7 +45,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "The Startup Ideas Podcast",
@@ -58,7 +61,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Limitless by Bankless",
@@ -73,7 +77,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": true
+      "remove_images": true,
+      "convert_to_mp3": false
     },
     {
       "name": "80,000 Hours Podcast",
@@ -88,7 +93,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Dwarkesh Podcast",
@@ -103,7 +109,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "LessWrong posts by Zvi Mowshowitz",
@@ -118,7 +125,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "State of Agentic Coding",
@@ -133,7 +141,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "The Cognitive Revolution",
@@ -148,7 +157,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 2,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Doom Debates",
@@ -163,7 +173,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Nerd Snipe with Theo and Ben",
@@ -178,7 +189,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "AXRP",
@@ -193,7 +205,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Machine Learning Street Talk (MLST)",
@@ -208,7 +221,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Into AI Safety",
@@ -223,7 +237,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Tech Brew Ride Home",
@@ -238,7 +253,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Lex Fridman Podcast",
@@ -253,7 +269,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": true,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "The Pragmatic Engineer",
@@ -268,7 +285,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": true,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Changelog",
@@ -283,7 +301,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 0,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Merge Conflict",
@@ -298,7 +317,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 0,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Syntax",
@@ -313,7 +333,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "On The Brink",
@@ -328,7 +349,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Bankless",
@@ -343,7 +365,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Committing High Reason",
@@ -358,7 +381,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "The Twenty Minute VC",
@@ -373,7 +397,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": true,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Acquired",
@@ -388,7 +413,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Stepchange",
@@ -403,7 +429,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     },
     {
       "name": "Empires - An Asian Business Podcast",
@@ -418,7 +445,8 @@
       "append_number_to_title": true,
       "leading_zeros_amount": 3,
       "remove_existing_tags": false,
-      "remove_images": false
+      "remove_images": false,
+      "convert_to_mp3": false
     }
   ]
 }

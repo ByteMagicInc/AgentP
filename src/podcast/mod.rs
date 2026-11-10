@@ -4,6 +4,7 @@ mod config_files;
 mod data;
 mod download;
 mod episode_search;
+pub mod ffmpeg;
 mod http;
 mod rss_feed;
 
