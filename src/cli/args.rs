@@ -60,11 +60,12 @@ pub enum Command {
             Coding agents such as Claude Code and Codex follow it to download episodes \
             with this CLI. Save it as SKILL.md in an agent's skill folder, for example:\n\n  \
             mkdir -p ~/.claude/skills/agentp && agentp skill > ~/.claude/skills/agentp/SKILL.md\n\n\
-            In Windows PowerShell, redirect through cmd so the file is UTF-8:\n\n  \
-            cmd /c \"agentp skill > %USERPROFILE%\\.claude\\skills\\agentp\\SKILL.md\"\n\n\
-            `npx skills add ByteMagicInc/AgentP --skill agentp -g` installs the repository's \
-            latest copy instead, written for the latest release; it offers to upgrade an \
-            older binary."
+            In Windows PowerShell 5.1, whose > writes UTF-16, go through cmd:\n\n  \
+            cmd /c 'mkdir \"%USERPROFILE%\\.claude\\skills\\agentp\" 2>nul & \
+            agentp skill > \"%USERPROFILE%\\.claude\\skills\\agentp\\SKILL.md\"'\n\n\
+            `npx skills add ByteMagicInc/AgentP --skill agentp -g` installs the copy on the \
+            repository's master branch instead. It can be ahead of the latest release: it \
+            offers to upgrade an older AgentP, and stops when no newer release is out yet."
     )]
     Skill,
 }

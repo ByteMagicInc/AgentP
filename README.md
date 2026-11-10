@@ -80,7 +80,7 @@ Podcast selectors accept either a 1-based index or a case-insensitive name. A su
 npx skills add ByteMagicInc/AgentP --skill agentp -g
 ```
 
-This installs the `agentp` [agent skill](https://skills.sh) for Claude Code, Codex, Cursor and other coding agents, so you can ask one to download an episode, find one by topic, date or number, or add a podcast, and it drives the CLI for you. Leave out `-g` to install it into the current project only. It needs Node.js 22.20 or later. The skill is written for the latest AgentP release and offers to upgrade an older one.
+This installs the `agentp` [agent skill](https://skills.sh) for Claude Code, Codex, Cursor and other coding agents, so you can ask one to download an episode, find one by topic, date or number, or add a podcast, and it drives the CLI for you. Leave out `-g` to install it into the current project only. It needs Node.js 22.20 or later. The skill tracks the `master` branch, so it can be ahead of the latest release: it offers to upgrade an older AgentP, and stops when no newer release is out yet.
 
 Without Node, `agentp skill` (in releases after 0.3.0) prints the copy bundled with your installed version. Save it as `SKILL.md` in your agent's skill folder:
 
@@ -88,11 +88,11 @@ Without Node, `agentp skill` (in releases after 0.3.0) prints the copy bundled w
 mkdir -p ~/.claude/skills/agentp && agentp skill > ~/.claude/skills/agentp/SKILL.md
 ```
 
-On Windows, from PowerShell (its own `>` would write UTF-16, which agents cannot read):
+On Windows, from PowerShell, go through `cmd`: Windows PowerShell 5.1's `>` writes UTF-16, which agents cannot read.
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\.claude\skills\agentp" | Out-Null
-cmd /c "agentp skill > %USERPROFILE%\.claude\skills\agentp\SKILL.md"
+cmd /c 'agentp skill > "%USERPROFILE%\.claude\skills\agentp\SKILL.md"'
 ```
 
 ## See AgentP in action
