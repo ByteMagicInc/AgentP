@@ -105,7 +105,7 @@ impl App {
             PodcastEditorTarget::Template => self.config.default_podcast.clone(),
         };
         let first_field = match &target {
-            PodcastEditorTarget::Template => 4,
+            PodcastEditorTarget::Template => PODCAST_FIELD_BOOL_START,
             _ => 0,
         };
         let mut ls = ListState::default();
@@ -134,7 +134,7 @@ impl App {
 
     pub fn podcast_editor_first_field(&self) -> usize {
         match self.podcast_editor.target {
-            PodcastEditorTarget::Template => 4,
+            PodcastEditorTarget::Template => PODCAST_FIELD_BOOL_START,
             _ => 0,
         }
     }

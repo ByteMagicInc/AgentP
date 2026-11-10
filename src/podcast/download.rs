@@ -289,6 +289,10 @@ pub async fn download_selected_episodes(
 }
 
 /// The audio container of a downloaded episode, sniffed from its first bytes.
+///
+/// The bytes decide, never the URL or `Content-Type`: some feeds mix `audio/mp4`
+/// `.m4a` episodes into an MP3 feed, and an ID3 tag prepended to an MP4 file leaves
+/// it unplayable, so MP4 is tagged with `mp4ameta` instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AudioContainer {
     Mp3,
@@ -320,6 +324,9 @@ impl AudioContainer {
     ///
     /// MPEG audio frames and AAC ADTS frames share the leading sync bits; ADTS always
     /// sets the two layer bits to `00`, which no MPEG audio frame uses.
+    ///
+    /// Only one leading tag is skipped, without recursing, so stacked tags from a
+    /// hostile feed cannot overflow the stack.
     fn sniff(bytes: &[u8]) -> Self {
         if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
             return Self::Mpeg4;
@@ -363,6 +370,9 @@ impl AudioContainer {
         }
     }
 
+    /// The extension used when the URL's own is not one of
+    /// [`allowed_extensions`](Self::allowed_extensions): it goes after the episode
+    /// title, or is appended to the kept URL file name.
     fn default_extension(self) -> &'static str {
         match self {
             Self::Mpeg4 => "m4a",
@@ -424,6 +434,7 @@ enum Conversion {
     Converted {
         leftover: Option<String>,
     },
+    /// `ffmpeg` is not on `PATH`; the batch warns once and stops trying.
     FfmpegMissing,
     Failed(String),
 }
@@ -503,6 +514,9 @@ const FFMPEG_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 ///
 /// The input demuxer is forced with `-f`, only the `file` protocol is allowed, and both
 /// paths carry a `file:` prefix so a path can never be read as an option or a URL.
+///
+/// On a timeout it awaits `Child::kill`, so the process has exited before the caller
+/// deletes the `.part` file: Windows refuses to delete a file a dying process holds.
 async fn run_ffmpeg(
     source: &Path,
     output: &Path,

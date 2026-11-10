@@ -2,132 +2,82 @@
 
 This file is a verbatim copy of `AGENTS.md`, kept for tools that do not follow file imports. `AGENTS.md` is the source of truth: make edits there and mirror them here so the two never disagree.
 
-## Commands
+## Done
 
-- `cargo build` — compile
-- `cargo run` — launch the default mode (TUI unless `default_mode` is `cli`)
-- `cargo run -- <subcommand>` — run a CLI subcommand (e.g. `podcast list`, `download`)
-- `cargo check` — fast type-check without full compilation
-- `cargo test` — run unit tests
-- `cargo clippy -- -D warnings` — lint with zero warnings
-- `cargo build --release` — optimized build
+CI runs automatically only when a release is tagged (`release.yml` calls `ci.yml`), never on a pull request, so a change is checked before it merges only if you check it. A change is done when:
+
+- **Green:** all three pass, exactly as CI runs them:
+  - `cargo fmt --all -- --check`
+  - `cargo clippy --all-targets --locked -- -D warnings`
+  - `cargo test --all --locked`
+- **Documented:** a change to keys, CLI flags or `Podcast` fields updates the matching README table (Keyboard reference, CLI reference, Per-podcast options).
+- **Pictured:** a change to a screen the README shows is re-recorded with `docs/capture_media.py`. It runs on Linux only (its docstring says how); elsewhere, say in the hand-off that the media needs re-recording.
+
+## Commits and releases
+
+Start commit subjects with `Fix`, `Add`, `Refactor` or `Update`: `cliff.toml` groups the changelog by that first word. Releasing is in `docs/releasing.md`.
+
+## Running the app
+
+- `cargo run -- <subcommand>` runs the headless CLI (`podcast list`, `podcast episodes --podcast 1 --search …`, `download …`); `cargo run -- --help` lists the surface. `cargo run -- --tui` opens the TUI, which needs a real terminal; plain `cargo run` follows `default_mode` in `config.json`.
+- **Both modes read and write the real config** in `<home>/.config/AgentP/` (`config.json`, `podcasts.json`). To experiment on Linux or macOS, point `HOME` at a scratch folder. On Windows `dirs::home_dir` ignores environment variables, so back up both files first and restore them after.
 
 ## Architecture
 
-AgentP is a single-binary Rust application for downloading and tagging podcast episodes. It has two modes: an interactive **TUI** built with `ratatui`/`crossterm`, and a headless **CLI** built with `clap`. The default mode is configurable via `default_mode` in `config.json`.
+AgentP is one Rust binary with two modes: an interactive **TUI** (`ratatui`/`crossterm`) and a headless **CLI** (`clap`). Every source file opens with a `//!` doc naming what it owns: `app/` holds state and screen logic, `ui/` renders, `podcast/` holds data types, config I/O, RSS and downloads, and `cli/` the headless mode.
 
-**Stack:** Tokio for async HTTP and tasks; `tokio::sync::mpsc` carries results from background work into the TUI loop. The TUI main loop calls `terminal.draw` every iteration and blocks on `event::poll(Duration::from_millis(50))` before reading input, so redraws are driven by that poll interval when idle (not a fixed 60 FPS).
+- **Async and redraws:** episode, latest-title and feed-metadata fetches and downloads run on `tokio::spawn` and report over unbounded `mpsc` channels, sending errors as `String`. The TUI loop draws, drains the channels with `try_recv`, then blocks on a 50 ms `event::poll`; there is no repaint timer, so background work that should change the screen sends on a channel. Two things are read at draw time instead: the banner animation's elapsed time and the `ffmpeg` check in `podcast/ffmpeg.rs`. The CLI awaits the same functions directly.
+- **Tests never run `ffmpeg`.** App-state code leaves `ffmpeg::refresh_in_background` to `tui.rs`, which calls it at launch in `run` and in `apply_action` whenever an action turns Convert To MP3 on.
+- **HTTP** goes through `podcast::http::client()`, which carries the `User-Agent` some podcast hosts require; a podcast's `user_agent` overrides it on audio downloads only.
 
-**Source modules:**
+## TUI
 
-- `main.rs` — entry point, CLI argument parsing via `clap`, dispatches to TUI or CLI mode based on subcommand or `default_mode` config
-- `tui.rs` — TUI event loop: terminal setup, key dispatch against the keymap, spawns background tasks, command-palette handling
-- `cli/` — headless CLI mode, split by concern:
-  - `args.rs` — `clap` derive structs: `Cli`, `Command`, `PodcastCommand`, `DownloadArgs`, `ConfigCommand`, `OpenCommand`, and all args types
-  - `handlers.rs` — command execution: podcast CRUD, download with `--episodes`/`--latest`/`--oldest`/`--all`, config show/set/path, open folders
-  - `mod.rs` — re-exports `Cli` and `run`
-- `app/` — application state and screen logic, split by concern:
-  - `state.rs` — `App` struct, `Screen` enum, core state, navigation, episode/download handling
-  - `episode_filter.rs` — episode search and go-to-number state on `App`: `EpisodePrompt`, the visible-episode list and its search index, prompt editing and paste, jump logic
-  - `commands.rs` — command palette types (`CommandEntry`, `COMMANDS`), filtering, and navigation
-  - `keymap.rs` — every key binding: `Key`, `Action`, `Binding`, `KeyContext`, `context_bindings`, `resolve_global` / `resolve_context`, `hints`
-  - `config_screen.rs` — config menu screen logic, directory editing, folder operations
-  - `about.rs` — about screen state: version and build info, issue tracker link, clipboard copy
-  - `podcast_editor.rs` — edit-podcast screen logic (field navigation, save/discard, delete)
-  - `add_podcast_wizard.rs` — multi-step wizard (`WizardStepKind`, `WIZARD_STEPS`), step navigation
-- `podcast/` — data types and I/O, split by domain:
-  - `data.rs` — `Podcast`, `Config`, `DefaultMode`, `EpisodeInfo`, `DownloadEvent` structs
-  - `config_files.rs` — `load_config` / `save_config`, path helpers (`config_dir`, `config_path`)
-  - `rss_feed.rs` — `fetch_episode_list`, `get_last_podcast_name`, `fetch_feed_metadata` / `FeedMetadata` (async RSS fetching)
-  - `ffmpeg.rs` — `probe` runs `ffmpeg -version` with a timeout; `refresh_in_background` and `status` let the TUI check off the event loop and read the result at draw time, the way the banner reads elapsed time. The TUI starts a check at launch and again whenever an action turns Convert To MP3 on (`apply_action` in `tui.rs`); the CLI calls `probe` directly in `podcast add`/`edit` and `config show`
-  - `download.rs` — `download_selected_episodes` (async download, optional `ffmpeg` re-encode of non-MP3 audio to MP3 (`convert_to_mp3`), then ID3 tags for MP3 or MP4 metadata atoms for M4A, chosen by sniffing the bytes; raw AAC and unknown formats that were not converted stay untagged); `sanitize_filename` shared `pub(crate)` helper
-  - `episode_search.rs` — the search grammar shared by the TUI's `/` search and `podcast episodes --search`; its module doc lists every term
-- `ui/` — rendering, split per screen:
-  - `theme.rs` — Dracula color palette
-  - `banner.rs` — the podcast-list banner: mascot art, both wordmarks, and `draw_banner`, which left-aligns them in a centered box and animates a one-shot typewriter reveal plus a periodic blink, both pure functions of `App::banner_started.elapsed()`. `banner_style` picks `WORDMARK_JOINED` (box-drawing strokes that meet across cell edges) or `WORDMARK_ASCII`; both place the letters in the same columns.
-  - `widgets.rs` — shared helpers (`styled_block`, `key_hint`, `hint_bar`, `render_centered_dialog`, `format_date`)
-  - `podcast_list.rs` — render podcast list screen
-  - `episode_select.rs` — render episode selection with checkboxes
-  - `download.rs` — render download progress screen
-  - `config.rs` — render config menu and confirmation dialogs
-  - `about.rs` — render about screen
-  - `edit_podcast.rs` — render podcast editor and podcast selection screens
-  - `add_podcast.rs` — render add-podcast wizard
-  - `command_palette.rs` — render command palette overlay
+Screens are the `Screen` enum in `app/state.rs`. Downloads run **PodcastList → EpisodeSelect → Downloading**; **Config** reaches **EditPodcastSelect → EditPodcast**, the **AddPodcast** wizard and **About**.
 
-**CLI surface:** full command list is in the README and `agentp --help`. Two non-obvious things to know when writing or changing CLI code:
+### Keymap
 
-- `--podcast <selector>` accepts either a 1-based index or a case-insensitive name match — see how handlers resolve this in `cli/handlers.rs`.
-- `download` is mutually exclusive across `--episodes`/`--latest`/`--oldest`/`--all`; `clap` enforces this via the `DownloadArgs` group in `cli/args.rs`.
+`app/keymap.rs` is the single source of truth for key bindings; read its module doc and the `Binding` and `KeyContext` docs before touching one. What they leave out:
 
-**TUI Screens (`Screen` enum):**
+- **Two guards diverge on purpose.** `enabled` decides whether keys dispatch; `hint_when` decides whether the hint shows. The editor's `Space Toggle` is hinted always but dispatches only on a bool field; the wizard's `Backspace` always dispatches (deleting a character, or stepping back on an empty buffer) but is hinted only past the first step. One predicate for both breaks one of them.
+- **Overlays keep the bar underneath.** `App::key_context` includes the delete prompt and the folder and directory confirmations so they can rebind keys; `App::hint_context` maps them back to the screen underneath. Only the editor's discard confirmation and the wizard's Manual/Prepopulate overlay replace the bar.
+- **`GLOBALS` resolve first:** `Ctrl+C` and `Ctrl+K` always, `q` and `?`/`.` only when `not_typing`, which is why `Ctrl+K` opens the palette from inside a text field. Contexts still list `&QUIT` and `&COMMAND_PALETTE` to place their hints.
+- **Some keys never reach the keymap.** `tui.rs` handles them first: the list jumps (`Home`/`g`, `End`/`G`, `PageUp`/`PageDown`, through `apply_list_jump`), a digit on the episode list, and the command palette's own keys, because its list is driven by the filter. The duplicate-key test cannot see these, so check them before binding a key.
+- Golden tests pin each hint context's `(key, label)` sequence. Update the golden when a hint change is intended.
 
-1. **PodcastList** — podcast list with latest-episode preview; `j/k` or arrows move, `Enter` opens episodes, `r` refresh feeds, `c` config, `e` edit selected podcast, `D` delete prompt (confirm with `y`/`D`, cancel `Esc`; `Enter` is excluded here because it opens a podcast on this screen and deletion is irreversible); `Home`/`g`, `End`/`G`, `PageUp`/`PageDown` jump and page
-2. **EpisodeSelect** — checkboxes per episode, each row prefixed with its feed number; `Space` toggle, `a` all (visible episodes only), `s` sort, `/` search, `#` or a digit go to an episode number, `o` open podcast folder, `Enter` download (if any selected), `Esc` back (clears an active search first)
-3. **Downloading** — progress gauge and log; `Esc` returns when finished or on error
-4. **Config** — menu: add podcast, download folder, default mode, banner style, new-podcast defaults, edit podcasts list, open `config.json`, open `podcasts.json`, open download folder, about, report issue; dialog and directory text-edit modes; `Esc` back to podcast list in navigate mode; `r` on download-folder row restores default path
-5. **EditPodcastSelect** — pick a podcast; `Enter` opens editor, `Esc` to config
-6. **EditPodcast** — field list for one podcast or template; text / bool / usize editing; `s` save, `r` restore field default, `R` reset all on the template, `Esc` discard in navigate mode; `Ctrl+C` exit with discard confirmation when dirty; `Ctrl+V` paste while editing text
-7. **AddPodcast** — multi-step wizard (`WIZARD_STEPS` in `add_podcast_wizard.rs`); first step is Feed URL; pressing Enter on it shows a **mode-select overlay** (`1`/`m` Manual, `2`/`p` Prepopulate from feed); Prepopulate fetches channel metadata and pre-fills Name, Album Name (sanitized), and Artist; `Esc` cancels/returns at each stage; `Ctrl+V` on text steps
-8. **About** — version and build info (version, git SHA, platform, profile) with repository and new-issue links; `i` opens the issue page, `c` copies the version string to the clipboard, `o` opens the repository, `Esc` returns to the previous screen; reachable from the config menu and the palette
+### Command palette
 
-**Primary flows:** **PodcastList → EpisodeSelect → Downloading** for downloads. **Config** (from `c` on the podcast list or the palette) reaches **EditPodcastSelect → EditPodcast** and the add-podcast wizard.
+Entries are `COMMANDS` in `app/commands.rs`. A `shortcut` is an optional `&'static Binding`, never key text: the palette prints that binding's keys for the entry's own action, and only where `Binding::is_live_on_screen` holds for the screen behind the palette.
 
-**Quitting:** `App::request_quit` is the one path for both `q` and the palette **Quit**: it refuses while `download_in_progress`, opens the save/discard confirmation on **EditPodcast** with unsaved changes (`dirty`), returning there first when **About** was opened over that editor, and otherwise sets `should_quit`. `Ctrl+C` calls `request_force_quit`, which skips only the download guard. Nothing breaks out of the loop directly — the loop exits on `should_quit`.
+### Quitting
 
-**Keymap — the single source of truth for keys.** Every TUI binding is declared once in `app/keymap.rs`. A `Binding` carries its keys, the hint-bar `display` and `label`, the `Action` each key produces, and its guards; `context_bindings(KeyContext)` lists the bindings a screen-and-mode offers **in hint-bar order**, which is the order the bar collapses left to right. `tui.rs` resolves a `KeyEvent` to an `Action` (`resolve_global`, then `resolve_context`) and applies it in one `match`; `ui/widgets.rs` renders the bar from `keymap::hints`; `commands.rs` points each palette entry at a `Binding`. Rebinding a key is one edit to that binding's `keys`.
+Every quit path calls `App::request_quit` (`q`, the palette's **Quit**) or `request_force_quit` (`Ctrl+C`), which hold the download and unsaved-editor guards. The loop exits on `should_quit` alone.
 
-- **`display: None` derives the hint text from the keys** through `key_display`, so a rebind needs no second edit. Set it only for grouped hints (`↑/↓`, `Shift+↑/↓`, `+/-`, `1/m`, `Type`), where one hint covers several keys or even two actions.
-- **Two guards, not one.** `enabled` decides whether the keys dispatch; `hint_when` decides whether the hint shows, and defaults to `enabled`. They diverge on purpose: the editor's `Space Toggle` is hinted always but dispatches only on a bool field, and the wizard's `Backspace` dispatches always — deleting a character, or stepping back when the buffer is already empty — but is hinted only past the first step. Gating both on one predicate breaks one of them.
-- **Contexts and hint contexts differ.** `App::key_context` includes the overlays — delete prompt, folder and directory confirmations — so they can rebind keys; `App::hint_context` maps them back to the screen underneath, which keeps showing its own hint bar. Only the editor's discard confirmation replaces the bar.
-- **`GLOBALS` resolve before the context:** `Ctrl+C` and `Ctrl+K` unconditionally, `q` and `?`/`.` only when `not_typing` (no palette, no text field) — which is why `Ctrl+K` opens the palette from inside a text field. Contexts still list `&QUIT` and `&COMMAND_PALETTE` to place those hints.
-- Character keys and `Backspace` that no binding claims fall through to the context's text buffer (`KeyContext::is_text_input`). Palette navigation stays in `tui.rs`, because its list is driven by the filter.
-- Invariant tests guard all of it: a golden `(key, label)` sequence per hint context — the collapse order — plus no context binding one key twice, and `commands.rs` checks every palette shortcut names a binding that runs that entry's action.
+### Episode search and jump
 
-**List navigation:** `apply_list_jump` in `state.rs` handles `Home`/`g`, `End`/`G`, `PageUp`/`PageDown` against any `ListState`, clamped to `floor..len`; the floor is non-zero on the template editor, where `podcast_editor_first_field` hides the identity fields. The `apply_list_jump` wrapper in `tui.rs` picks the list for the current `KeyContext` and runs before keymap resolution, so the jump keys reach every list without each context repeating them. Contexts with no list — the overlays among them — return false. The add-podcast wizard is a stepper and is deliberately excluded, as is the command palette: its list is driven by the filter, where `Char` keys must reach `palette_type` rather than jump the cursor.
-
-**Episode search and jump.** `App::episodes` and `episode_selected` always hold the whole feed, so downloads and sorting never see a filter. Four invariants keep the filtered view honest:
+`App::episodes` and `episode_selected` always hold the whole feed, so downloads and sorting never see a filter; select-all (`a`) acts on the episodes the search leaves showing. Four invariants keep the filtered view honest:
 
 - **Cursor:** `episode_visible` holds indices into `episodes`, and `episode_list_state` points into `episode_visible`. Read the cursor through `current_episode_index()` and render by iterating `episode_visible`; indexing `episode_selected` by list position picks the wrong episode.
 - **In step:** `episode_search_index` holds one `SearchEntry` per episode, in `episodes` order. `reset_episode_view` rebuilds it and `toggle_sort_order` reverses it together with `episodes` and `episode_selected`; any other code that replaces or reorders `episodes` keeps all three in step.
-- **Go to by number:** the go-to number is a `feed_index` (see the episode-index gotcha), not a list position, so it finds the episode under either sort order. A digit typed on the list opens the prompt already holding that digit: an `Action` carries no payload, so `tui.rs` seeds it before keymap resolution, as it does for `apply_list_jump`, and `GO_TO_EPISODE` binds `#` for the palette and the hint bar.
-- **Typing and pasting:** `EpisodeSearch` and `EpisodeJump` are text-input contexts (`is_text_input`), so `q`, `?`, `j` and `Space` type instead of acting. Paste goes through `insert_pasted` in `tui.rs`, which lets each prompt decide what a paste means: the search turns line breaks into spaces, and the go-to prompt takes only a plain number, optionally led by `#`.
+- **Go to by number:** the go-to number is a `feed_index` (see **Episode numbers** below), not a list position, so it finds the episode under either sort order. A digit typed on the list opens the prompt already holding that digit: an `Action` carries no payload, so `tui.rs` seeds it before keymap resolution, and `GO_TO_EPISODE` binds `#` for the palette and the hint bar.
+- **Typing and pasting:** `EpisodeSearch` and `EpisodeJump` are text-input contexts, so `q`, `?`, `j` and `Space` type instead of acting. Paste goes through `insert_pasted` in `tui.rs`, which lets each prompt decide what a paste means: the search turns line breaks into spaces, and the go-to prompt takes only a plain number, optionally led by `#`.
 
-The query grammar lives in `podcast::episode_search`, shared with `podcast episodes --search`; its module doc is the reference for every term. A date term matches by calendar date and also as literal text, so `9/11` still finds a title that says it: keep both paths.
+The query grammar is `podcast::episode_search`, shared with `podcast episodes --search`; its module doc is the reference for every term.
 
-**Command palette:** `Ctrl+K` toggles. Type to filter; arrows move; `Enter` runs the selected `Action`; `Esc` closes; `Ctrl+V` pastes into the filter. Entries live in `commands.rs` as `COMMANDS`, and each one's `shortcut` is a `&'static Binding` rather than a string — the palette prints the keys that binding maps to the entry's own action, so `Shift+↑/↓ Reorder` still shows as `Shift+↑` on **move podcast up**. It names those keys only where they are wired (`Binding::is_live_on_screen`): every entry runs from the palette, but most of the keys are bound on one screen, so **open config editor** shows `c` on the podcast list and nothing elsewhere, and no entry names a key over a text field. That question is asked of the screen behind the palette rather than through `enabled`, because the palette is a text field itself and `not_typing` reads false for as long as it is open. On **PodcastList**, **go to podcast list** is hidden; the open-folder line reads **open selected podcast folder**. On **Config**, **open config editor** is hidden.
+### Podcast editor and wizard
 
-**Data flow:**
+The editor (`podcast_editor.rs`) and the add-podcast wizard (`add_podcast_wizard.rs`) share `WIZARD_STEPS` and address fields **by position**: identity text first, then the bools from `PODCAST_FIELD_BOOL_START`, the usize field at `PODCAST_FIELD_USIZE`, and `user_agent` last. The editor also edits the **template**, `config.default_podcast` (Config → New-podcast defaults), which starts at `PODCAST_FIELD_BOOL_START`. A field change is done when every site listed on `PODCAST_FIELD_COUNT` in `app/state.rs` agrees: their catch-all arms fail silently, and the tests check only the step layout.
 
-1. `load_config()` reads from `<home>/.config/AgentP/` (via `dirs`); on Windows the same relative path is typically `%USERPROFILE%\.config\AgentP\`. `config.json` holds `download_dir_location`, `default_podcast`, `default_mode`, and `banner_style`; `podcasts.json` holds the podcast list. Missing files are created (demo podcasts from `example.podcasts.json` when appropriate). `example.podcasts.json` in the repo is the template for the podcast list shape.
-2. On TUI startup, `spawn_latest_fetches` runs `get_last_podcast_name` per podcast on `tokio::spawn`; results arrive on an unbounded `mpsc` channel consumed with `try_recv` in the main loop.
-3. Choosing a podcast spawns `fetch_episode_list`; results arrive on a separate unbounded `mpsc` channel as `Ok(episodes)` / `Err`.
-4. `download_selected_episodes()` writes under `<download_dir>/<effective_album_name>/` with optional tags (ID3 or MP4); `effective_album_name()` falls back to podcast name when album_name is empty. Progress uses `DownloadEvent` on `mpsc`.
-5. Config changes from the TUI call synchronous `save_config()` in `config_files.rs`, which rewrites both JSON files.
+## Data and config
 
-**Async architecture:** Episode fetch, latest-title fetch, and downloads use `tokio::spawn` and `mpsc`; the TUI main loop drains channels with `try_recv()` each frame. CLI commands call the same async functions directly.
+- **Adding a `Podcast` field:** mark it `#[serde(default)]`, because existing `podcasts.json` files and the `default_podcast` in `config.json` lack it, and give it a load test like `convert_to_mp3_defaults_to_false_when_missing_from_saved_json`. Add it to `default.config.json`, which `Podcast::default()` parses, and to each podcast in `example.podcasts.json`, which seeds new installs; empty strings such as `user_agent` stay out.
+- **Feeds are not all MP3.** `download.rs` sniffs each file's container from its bytes and tags MP4 with `mp4ameta`, never ID3. With `convert_to_mp3` on, `ffmpeg` runs only on a positively sniffed container, with its demuxer forced and only local files allowed: the file is untrusted, and a probed `Unknown` file could make `ffmpeg` fetch URLs or read local files. A missing or failed conversion, an unrecognised format and an original that could not be deleted are each a `DownloadEvent::Warning`, not an `Error`: the episode is usable, so `agentp download` still exits 0. Download, write and tag failures stay errors. The docs on `AudioContainer`, `convert_to_mp3` and `run_ffmpeg` hold the details. The CLI mirrors every option through `PodcastFieldArgs` in `cli/args.rs`, `apply_podcast_fields` and the `podcast show` and `config show` printers in `cli/handlers.rs`.
+- **Episode numbers:** index 1 is the oldest episode and the highest index the newest. `feed_index` is `length - rss_idx` in `rss_feed.rs` and `download.rs` inverts it, so a newest-first feed numbers its latest episode as the episode count. `--episodes`, `podcast episodes`, go-to and the ID3 title-number prefix share this; `--latest` and `--oldest` select by feed order instead. Change it everywhere or nowhere.
+- **`save_config()` rewrites both JSON files** on every call, so a TUI edit needs one save whichever file it touches.
+- **Legacy JSON keys load but are never written.** `Podcast` in `data.rs` reads `override_*`, `leading_zeros_to_title`, `create_new_tags` and `remove_image` through `serde` aliases and writes the Rust names (`overwrite_*`, `leading_zeros_amount`). Keep every alias: dropping one silently breaks configs that predate the rename.
+- **`effective_album_name()`** names a podcast's download folder and falls back to the podcast name when `album_name` is empty.
 
-**Per-podcast options** in `podcasts.json` use JSON keys `override_tags`, `remove_existing_tags`, `remove_images`, `override_album_name`, `override_artist`, `override_title`, `override_file_name`, `leading_zeros_to_title`, `convert_to_mp3`, and `user_agent` (see `serde` aliases on `Podcast` in `data.rs`; Rust fields are named `overwrite_*` plus `album_name`, `artist`, etc.). Most control tag and filename behavior; `convert_to_mp3` (off by default through `serde(default)`, matching `default.config.json`) re-encodes non-MP3 downloads with `ffmpeg`; `user_agent` overrides the built-in `AgentP/<version>` `User-Agent` for that podcast's audio downloads (blank = default), applied as a per-request header in `download.rs`. The shared `reqwest` client in `podcast/http.rs` carries the default `User-Agent`; RSS feed fetches always use that default.
+## Code style
 
-**Podcast editor/wizard field indices are positional.** The TUI podcast editor (`podcast_editor.rs`) and add-podcast wizard (`add_podcast_wizard.rs`) share one `WIZARD_STEPS` list and address fields by index: identity text fields `0..PODCAST_FIELD_BOOL_START`, bool `PODCAST_FIELD_BOOL_START..PODCAST_FIELD_USIZE` (4..13, with `convert_to_mp3` at 10 right after **Rename Files**), usize `PODCAST_FIELD_USIZE` (13), then `user_agent` as the final field (14) — a Text field kept last in the UI (constants in `state.rs`). Because text fields are no longer contiguous, the wizard commits text by `WizardStepKind::Text`, not by an index threshold. `field_text`/`field_bool` in `data.rs`, the wizard's `add_podcast_step_is_visible`/`add_podcast_toggle_bool`/`add_podcast_commit_text`, and the editor's `enter_edit_mode`/`commit_edit`/`toggle_bool`/`restore_default` match on the same indices. Inserting or reordering a field means updating all of these together — the catch-all match arms make a wrong index fail silently, so the invariant test in `add_podcast_wizard.rs` guards it.
-
-**Key crates (directly used in `src/`):** `ratatui`, `crossterm`, `tokio`, `reqwest`, `rss`, `id3`, `serde`/`serde_json`, `anyhow`, `dirs`, `chrono`, `open`, `arboard`, `sanitize-filename`, `clap`, `unicode-width`, `mp4ameta`.
-
-`main.rs` and helpers use `anyhow::Result`. Async network/file streaming for downloads lives under Tokio in `podcast/download.rs`.
-
-## Gotchas
-
-- **Legacy JSON keys load but are never written.** `example.podcasts.json` and every config `save_config()` writes use the Rust names (`overwrite_*`, `leading_zeros_amount`). The older `override_*`, `leading_zeros_to_title`, `create_new_tags` and `remove_image` spellings survive only as `serde` aliases on `Podcast` in `data.rs`, and a config using them is rewritten canonically on the next save. Dropping an alias silently breaks configs that predate the rename.
-- **`example.podcasts.json` is the canonical shape.** If you add or rename a field on `Podcast`, update it too — it's what seeds new installs. Fields marked `skip_serializing_if` are optional and deliberately absent from it, `user_agent` among them.
-- **Episode index 1 is oldest; the highest index is newest.** `feed_index` is `length - rss_idx` in `rss_feed.rs`, and `download.rs` inverts it, so a feed that publishes newest-first numbers its latest episode as the episode count. `--episodes`, `podcast episodes`, and the ID3 title-number prefix all share this convention; `--latest` and `--oldest` select by feed order rather than by a literal index. Don't flip it in one place.
-- **Feeds are not all MP3.** Some (Latent Space among them) mix in `audio/mp4` `.m4a` episodes. `download.rs` sniffs the container from the first bytes (`ftyp` at offset 4 is MP4) rather than trusting the URL or `Content-Type`, and tags MP4 with `mp4ameta`: an ID3 tag prepended to an MP4 file leaves it unplayable. Raw AAC (ADTS) shares MP3's frame-sync bits but always has layer bits `00`, so `sniff` checks them and saves ADTS untagged. A leading ID3v2 tag does not settle it: `sniff` skips one tag by its syncsafe size (`id3v2_len`) and checks only for FLAC or ADTS after it, without recursing, so stacked tags from a hostile feed cannot overflow the stack; anything else after a tag stays MP3. A URL's extension survives, with or without `overwrite_file_name`, only when it is in the sniffed container's `allowed_extensions`; otherwise the container's `default_extension` (`.mp3`, `.m4a`, `.aac`, `.ogg`, `.flac`, `.wav`) is used, or appended to a kept URL file name. With `convert_to_mp3` on, a download whose `ffmpeg_input_format` is `Some` (MP4, ADTS, Ogg, FLAC, WAV, each positively sniffed) is written under that name first and `convert_to_mp3` (the function) runs `ffmpeg` into `<name>.mp3.part`, renames it into place, and only then deletes the original, so a missing or failing `ffmpeg` always leaves the original on disk; it then counts as MP3 for tagging. `Unknown` never reaches `ffmpeg`: the file is untrusted, and auto-probing could pick the HLS or concat demuxer and fetch URLs or read local files. So `run_ffmpeg` forces the demuxer with `-f`, sets `-protocol_whitelist file`, and passes both paths as absolute `file:` URLs. It tries copying cover art first (`-map 0:v? -c:v copy`) and retries once with `-vn`, because the MP3 muxer rejects a real video stream; when both fail it reports both failures. Each run is capped at `FFMPEG_TIMEOUT` (20 minutes): `run_ffmpeg` then awaits `Child::kill`, so the process has exited before the `.part` file is deleted (Windows refuses to delete a file a dying process still holds), and the run is not retried. A missing `ffmpeg` (`io::ErrorKind::NotFound`) is reported once per run, not per episode. A missing or failed conversion, an untaggable or unrecognised format, and a leftover original are all `DownloadEvent::Warning`, not `Error`: the episode is on disk and usable, so `agentp download` still exits 0. Only download, write and tag failures are errors. Tests never run `ffmpeg`, so app-state code never calls `ffmpeg::refresh_in_background`; the TUI does it in `apply_action`.
-- **`save_config()` rewrites both JSON files** every call — TUI-side edits don't need a separate save for `podcasts.json` vs `config.json`.
-- **TUI redraws are driven by the 50ms `event::poll`**, not a timer. If you add background work that should update the UI, send on an `mpsc` — don't rely on a repaint loop. The banner animation is the one thing that does ride the poll: it reads elapsed time at draw time and needs no task or channel.
-
-## Code Style
-
-- **Rust:** 2024 edition; use normal `rustfmt` formatting.
-- **No comments:** Do not add any comments to the code — no `//` or `/* */` comments. Doc comments (`///` and `//!`) are allowed.
-- **Errors:** use `anyhow::Result` for propagation.
-- **Naming:** `snake_case` fields, `PascalCase` types; derive `Debug` / `Serialize` / `Deserialize` as needed.
-- **Imports:** `std`, then external crates, then `crate::` modules.
+- Write every explanation as a doc comment: `///` on items, `//!` on modules. Inside function bodies too, the code carries no `//` or `/* */` comments; say it with a clearer name or in the item's doc instead.
+- Propagate errors with `anyhow::Result`.
+- Order imports `std`, then external crates, then `crate::`.

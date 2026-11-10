@@ -1,3 +1,6 @@
+//! Runs each CLI subcommand. `resolve_podcast` turns a `--podcast` selector into
+//! an index, trying an exact case-insensitive name before a 1-based number.
+
 use anyhow::{Result, bail};
 use tokio::sync::mpsc;
 

@@ -143,6 +143,23 @@ pub fn apply_list_jump(state: &mut ListState, len: usize, floor: usize, code: Ke
 /// Number of items in the config menu.
 pub const CONFIG_MENU_ITEM_COUNT: usize = 11;
 /// Total number of editable fields in the podcast editor.
+///
+/// The editor and the add-podcast wizard address fields by position, so adding
+/// or reordering a `Podcast` field means updating every site that matches on a
+/// field number, as well as `WIZARD_STEPS` and these constants:
+///
+/// - `Podcast::field_text` and `Podcast::field_bool` in `podcast/data.rs`
+/// - `podcast_editor_enter_edit_mode`, `podcast_editor_commit_edit`,
+///   `podcast_editor_toggle_bool` and `podcast_editor_restore_default`
+/// - `podcast_editor_reset_all_defaults`, which resets the template by name
+/// - `add_podcast_step_is_visible`, `add_podcast_commit_text`,
+///   `add_podcast_toggle_bool` and `add_podcast_adjust_usize`
+/// - `PODCAST_FIELD_CONVERT_TO_MP3`, read by `convert_to_mp3_warning` in `ui/widgets.rs`
+/// - the `wizard_has_fifteen_steps` test
+///
+/// Their catch-all arms make a missed site fail silently, and
+/// `wizard_steps_match_field_index_constants` checks only `WIZARD_STEPS`
+/// against these constants, not the match arms.
 pub const PODCAST_FIELD_COUNT: usize = 15;
 /// Index of the first boolean field in the podcast editor.
 pub const PODCAST_FIELD_BOOL_START: usize = 4;

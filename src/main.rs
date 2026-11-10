@@ -1,3 +1,6 @@
+//! Entry point: parses the command line, loads the config, and runs the CLI
+//! subcommand or the default mode.
+
 mod app;
 mod cli;
 mod podcast;

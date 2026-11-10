@@ -1,3 +1,5 @@
+//! `clap` definitions for every subcommand and flag.
+
 use clap::{ArgGroup, Args, Parser, Subcommand};
 
 use crate::podcast::{BannerStyle, DefaultMode};
